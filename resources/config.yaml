@@ -1,0 +1,96 @@
+
+
+---
+data_creation:
+  data_name: main_binary_experiment # name of data file for the created data
+  classes: 2 # Number of Classes to specify
+  modals: # The different modal volumes to use
+    - "flair"
+    - "t2"
+    - "t1ce"
+  bindings: # Binding dimensions
+    height:
+      - 56
+      - 184
+    width:
+      - 56
+      - 184
+    pictures:
+      - 13
+      - 141
+  raw_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\raw"
+  input_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
+  target_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
+  data_split: # How to split the data, represented as decimals
+    train: 0.8
+    validation: 0.1
+    testing: 0.1
+  data_augmentation:
+    - rotations:
+        - 90
+    - special:
+        - mix_up
+    - flipping:
+        - vertical
+        - horizontal
+  special_operations:
+    permutate_volumes: false # Create data sets for each MRI mode permutation
+    super_permutate: false # For each mri, do every single combination for each volume
+    data_augmentation: false # Include specified data augmentation
+---
+
+training:
+  experiment: fix_stuff # name of the experiment
+  epoch: 51 # epoch number
+  batch: 128 # batch number
+  output_size: # Output dimension for the model
+    height: 128
+    width: 128
+  save_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
+  learning_metrics:
+    - "loss"
+    - "accuracy"
+    - "dice index"
+    - "IoU"
+  ilr: 0.001
+  loss_function: Dice
+  optimizer: ADAM
+  alg_set_up:
+    name: UNet
+    parameters:
+      building_block:
+        - conv2d
+        - conv2d
+        - relu
+      stacks:
+        - 16
+        - 32
+        - 64
+      kernel: 3
+      stride: 1
+      max_pool: 2
+  special_operations:
+    continually_save_model: false # Continually save the model at the specified data locations
+    create_data: false # Create data with the specified data creation section
+
+---
+
+testing:
+  metrics:
+    - hausdorff
+    - dice_loss
+
+---
+
+graphing:
+  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model\\fix_stuff"
+  model_name: model.pth
+  loss_loc: Graph\\train_loss.pkl
+  data_input_loc: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\standard_experiment"
+  exp_loc: inputs\\epoch_121.pt
+  label_loc: targets\\epoch_121.pt
+  segmentation_res: true
+  model_loss: true
+  hd: true
+  iou: true
+  accuracy: true
