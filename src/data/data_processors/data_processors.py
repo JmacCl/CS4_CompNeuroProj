@@ -69,8 +69,8 @@ class BratsDataProcessor:
         # Determine if loading and creating data
 
         if create_data is True:
-            # Create folders if they don't exist
-            self.__create_necessary_folders()
+            # # Create folders if they don't exist
+            # self.__create_necessary_folders()
             input_data, target_data = self.__process_data()
         else:
             input_data, target_data = self.__load_data()
@@ -79,18 +79,18 @@ class BratsDataProcessor:
         self.input = input_data
         self.labels = target_data
 
-    def __create_necessary_folders(self):
-        """
-        Create necessary folders to hold processed data
-        :return:
-        """
-        input_path = os.path.join(self.processed_data, self.data_name, "inputs")
-        target_path = os.path.join(self.target_masks, self.data_name, "targets")
-
-        if not os.path.exists(input_path):
-            os.makedirs(input_path)
-        if not os.path.exists(target_path):
-            os.makedirs(target_path)
+    # def __create_necessary_folders(self):
+    #     """
+    #     Create necessary folders to hold processed data
+    #     :return:
+    #     """
+    #     input_path = os.path.join(self.processed_data, self.data_name, "inputs")
+    #     target_path = os.path.join(self.target_masks, self.data_name, "targets")
+    #
+    #     if not os.path.exists(input_path):
+    #         os.makedirs(input_path)
+    #     if not os.path.exists(target_path):
+    #         os.makedirs(target_path)
 
     def __determine_data_size(self):
         raw_data_path = os.path.join(self.raw_source, "BraTS2020_TrainingData", "MICCAI_BraTS2020_TrainingData")
@@ -101,9 +101,9 @@ class BratsDataProcessor:
         data_size = self.data_size
         return_dict = {}
 
-        train_index = floor(data_size * splits["training"])
+        train_index = floor(data_size * splits["train"])
         return_dict["training"] = train_index
-        val_index = floor(data_size * splits["validation"])
+        val_index = floor(data_size * splits["validation"]) + train_index
         return_dict["validation"] = val_index
         return_dict["testing"] = data_size
 
@@ -131,11 +131,11 @@ class BratsDataProcessor:
                             return_dict["vertical_flip"] = v2.RandomVerticalFlip(1)
                 elif key == "rotations":
                     for rot in vals:
-                        return_dict[key + str(rot)] = v2.RandomRotation(degrees=(-rot, rot))
+                        return_dict[key + str(rot)] = v2.RandomRotation(degrees=rot)
                 elif key == "special":
                     for techniques in vals:
                         if techniques == "mix_up":
-                            return_dict["mix_up"] = v2.MixUp
+                            return_dict["mix_up"] = v2.MixUp(num_classes=self.classes)
         return return_dict
     def __get_raw_data_files(self) -> Tuple[Dict, List]:
         """
@@ -171,10 +171,7 @@ class BratsDataProcessor:
         :param seg_list: Data path of each specified segmentation
         :return: Dataloader object
         """
-
-        input_data = []
-        target_data = []
-        # Iterate over all data files
+      # Iterate over all data files
 
         input_raw_data = []
         # For each defined volume type, add it to the list and process
@@ -187,12 +184,8 @@ class BratsDataProcessor:
         # Process segmented_data
         seg_data_path = Path(seg_list[i])
         target, (vals, counts) = self.__determine_seg(seg_data_path)
-        input_data.append(final_input)
-        target_data.append(target)
 
-        input_torch = torch.stack(input_data, dim=1)
-        target_torch = torch.stack(target_data, dim=1)
-        return input_torch, target_torch
+        return final_input, target
 
     def __process_data(self):
         """
@@ -206,14 +199,12 @@ class BratsDataProcessor:
         indices = list(range(len(list(volume_holder.values())[0])))
         random.shuffle(indices)
         count = 1
-
-        current_split = "training"
         for i in indices:
             image, seg = self.__collect_data(i, volume_holder, seg_list)
             self.__save_epoch(image, seg, "original", index=count)
-            for keys, augs in self.data_augmentation().items():
+            for keys, augs in self.data_augmentation.items():
                 if keys == "mix_up":
-                    dl_img, dl_seg = self.__augment_by_loader(image, seg)
+                    dl_img, dl_seg = self.__augment_by_loader(image, seg, function=augs)
                     self.__save_epoch(dl_img, dl_seg, keys, index=count)
                 else:
                     self.__save_epoch(augs(image), augs(seg), keys, index=count)
@@ -228,8 +219,17 @@ class BratsDataProcessor:
         else:
             return "testing"
 
-    def __augment_by_loader(self, image, seg):
-        loader = DataLoader((BraTS2020Data(inputs=image, segmentations=seg)))
+    def __augment_by_loader(self, image, seg, function):
+        dataset = BraTS2020Data(inputs=image, segmentations=seg)
+        loader = DataLoader(dataset, batch_size=len(image), collate_fn=function, shuffle=True)
+        images = []
+        segs = []
+        for idx, batch in enumerate(loader):
+            for input, target in batch:
+                images.append(input)
+                segs.append(target)
+
+        return torch.stack(images, dim=0), torch.stack(segs, dim=0)
 
 
     def __save_epoch(self, image, seg, data_type, index):
@@ -242,13 +242,17 @@ class BratsDataProcessor:
 
         # image data
         input_path = os.path.join(self.processed_data, self.data_name, data_type,
-                                  "inputs", current_split, "epoch_" + str(index) + ".pt")
-        torch.save(image, input_path)
+                                  "inputs", current_split)
+        if not os.path.exists(input_path):
+            os.makedirs(input_path)
+        torch.save(image, os.path.join(input_path, "epoch_" + str(index) + ".pt" ))
 
         # Targets
         target_path = os.path.join(self.target_masks, self.data_name, data_type,
-                                   "targets", current_split, "epoch_" + str(index) + ".pt")
-        torch.save(seg, target_path)
+                                   "targets", current_split)
+        if not os.path.exists(target_path):
+            os.makedirs(target_path)
+        torch.save(seg, os.path.join(target_path, "epoch_" + str(index) + ".pt" ))
 
 
 
@@ -310,10 +314,10 @@ class BratsDataProcessor:
         Given config input, determine what segmentation procedure to do
         :return:
         """
-        decision = str(self.segmentation_procedure)
-        if decision == "binary":
+        classes = self.classes
+        if classes == 2:
             return self.__seg_two_split(seg_data)
-        elif decision == "standard":
+        elif classes == 4:
             return self.__seg_four_split(seg_data)
 
 

@@ -1,8 +1,10 @@
 import sys
 from pathlib import Path
+from typing import List, Dict
 
 import torch
 import pickle
+import random
 import matplotlib.pyplot as plt
 import nibabel as nib
 from torch.utils.data import TensorDataset, DataLoader
@@ -38,17 +40,13 @@ def view_elem(tensor):
 
 #
 
-def prepare_plot(origImage, origMask, predMask):
+def prepare_plot(origImage):
     # initialize our figure
-    figure, ax = plt.subplots(nrows=1, ncols=3, figsize=(10, 10))
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 10))
     # plot the original image, its mask, and the predicted mask
-    ax[0].imshow(origImage, cmap="gray")
-    ax[1].imshow(origMask, cmap="gray")
-    ax[2].imshow(predMask, cmap="gray")
+    ax.imshow(origImage, cmap="gray")
     # set the titles of the subplots
-    ax[0].set_title("Image")
-    ax[1].set_title("Original Mask")
-    ax[2].set_title("Predicted Mask")
+    ax.set_title("Image")
     # set the layout of the figure and display it
     figure.tight_layout()
     figure.show()
@@ -89,36 +87,138 @@ def convert_mask(mask, model:bool, threshold=0.6):
 
     return segmentation_np
 
-def image_reveal(img, batch, dim):
-    # convert image
-    img_batch = img[batch]
-    img_batch = img_batch.squeeze(0)
+# def image_reveal(img, batch, dim):
+#     # convert image
+#     img_batch = img[batch]
+#     img_batch = img_batch.squeeze(0)
+#     np_ver = img_batch.numpy()
+#
+#     np_ver = np.transpose(np_ver, (1, 2, 0))
+#     return np_ver[:, :, dim]
+
+# def make_predictions(model, batch, mask, b):
+#     # set model to evaluation mode
+#     model.eval()
+#     # turn off gradient tracking
+#     batch_selection = batch[b].unsqueeze(0)
+#     with torch.no_grad():
+#         predMask = model(batch_selection)
+#         origMask = mask[b]
+#         predMask = predMask.squeeze(0)
+#
+#         return image_reveal(batch, b, 0), convert_mask(origMask, False), convert_mask(predMask, True)
+
+def plot_learning_metrics(metrics: Dict):
+    """
+    Given a specific learning metric, plot and examine results in
+    comparison with the epoch
+    :param metrics:
+    :param label:
+    :param y_label:
+    :return:
+    """
+    # Derive the title from the input metric
+    title: str = list(metrics.keys())[0]
+    # derive the pickle files from the metrics
+    recordings = metrics[title]["recordings"]
+
+    for val_keys, rec_path in recordings.items():
+        with open(rec_path, "rb") as file:
+            recordings = pickle.load(file)
+            print(recordings)
+            print(val_keys)
+            print(len(recordings))
+            print("\n")
+        plt.plot(recordings, label=val_keys)
+    y_label = metrics[title]["y_label"]
+    # For each set of recordings, plot the lists
+    plt.xlabel('Epoch')
+    plt.ylabel(y_label)
+    plt.title(title)
+    plt.legend()
+    plt.show()
+
+def process_image(image_location, dim, batch = None):
+    """
+    This function should take the location of a pytorch data file and process it
+    for a image graphing function
+    :param image_location:
+    :return:
+    """
+    # Load the file
+    data_tensor = torch.load(image_location)
+    # Derive a random batch
+    if batch is None:
+        batch_size = data_tensor.size(0)
+        random_batch = random.choice(list(range(batch_size)))
+        image_tensor = data_tensor[random_batch]
+    else:
+        image_tensor = data_tensor[batch]
+
+    # Process it into a numpy array and return
+    img_batch = image_tensor.squeeze(0)
     np_ver = img_batch.numpy()
 
     np_ver = np.transpose(np_ver, (1, 2, 0))
     return np_ver[:, :, dim]
 
-def make_predictions(model, batch, mask, b):
-    # set model to evaluation mode
-    model.eval()
-    # turn off gradient tracking
-    batch_selection = batch[b].unsqueeze(0)
-    with torch.no_grad():
-        predMask = model(batch_selection)
-        origMask = mask[b]
-        predMask = predMask.squeeze(0)
+def process_mask(mask_location,  model:bool, threshold=0.6, batch=None):
+    # Load the file
+    data_tensor = torch.load(mask_location)
+    # Derive a random batch
+    if batch is None:
+        batch_size = data_tensor.size(0)
+        random_batch = random.choice(list(range(batch_size)))
+        mask = data_tensor[random_batch]
+    else:
+        mask = data_tensor[batch]
 
-        return image_reveal(batch, b, 0), convert_mask(origMask, False), convert_mask(predMask, True)
+    if model:
+        mask = torch.softmax(mask, dim=0)
+    argmax_indices = torch.argmax(mask, dim=0)
+    segmentation_np = argmax_indices.cpu().numpy()
 
-def plot_model_loss(loss_values, label, y_label):
-    epochs = range(1, len(loss_values) + 1)
-    plt.plot(epochs, loss_values, label=label)
-    plt.xlabel('Epoch')
-    plt.ylabel(y_label)
-    plt.title(label)
-    plt.legend()
-    plt.show()
+    return segmentation_np
 
+def graphing(config: dict):
+    # Plot images
+    images = config["images"]
+    if images != None:
+        for specs in images:
+            volume = images[specs]["mri_volume"]
+            loc = images[specs]["location"]
+            batch = images[specs]["batch"]
+            img = process_image(loc, volume, batch)
+            prepare_plot(img)
+
+    # Plot masks
+    images = config["masks"]
+    if images != None:
+        for specs in images:
+            loc = images[specs]["location"]
+            batch = images[specs]["batch"]
+            img = process_mask(loc, False, batch=batch)
+            prepare_plot(img)
+
+    # Plot Learning metrics or Evaluation Results
+
+    learning_metrics = config["learning_metrics"]
+    for plots in learning_metrics:
+        plot_learning_metrics(plots)
+
+
+
+if __name__ == "__main__":
+    print(sys.argv)
+    cwd = os.getcwd()
+    config_path = os.path.join(cwd, sys.argv[1])
+    config = BraTS2020Configuration(config_path)
+    graphing(config.graphing)
+
+
+
+#
+"""
 def graphing(config: dict):
     experiment_location = config["experiment_location"]
     data_location = config["data_input_loc"]
@@ -157,11 +257,4 @@ def graphing(config: dict):
     if config["segmentation_res"]:
         prepare_plot(batch, orig_mask, pred_mask)
 
-
-if __name__ == "__main__":
-    print(sys.argv)
-    cwd = os.getcwd()
-    config_path = os.path.join(cwd, sys.argv[1])
-    config = BraTS2020Configuration(config_path)
-    graphing(config.graphing)
-
+"""

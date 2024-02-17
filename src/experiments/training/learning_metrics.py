@@ -2,6 +2,7 @@ import torch
 
 from scipy.spatial.distance import directed_hausdorff
 from src.experiments.utils import convert_mask
+from src.experiments.training.loss_functions import *
 
 
 def pixel_accuracy(original, predictions):

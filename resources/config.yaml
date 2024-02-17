@@ -2,7 +2,7 @@
 
 ---
 data_creation:
-  data_name: main_binary_experiment # name of data file for the created data
+  data_name: test_binary_experiment # name of data file for the created data
   classes: 2 # Number of Classes to specify
   modals: # The different modal volumes to use
     - "flair"
@@ -26,10 +26,8 @@ data_creation:
     validation: 0.1
     testing: 0.1
   data_augmentation:
-    - rotations:
-        - 90
-    - special:
-        - mix_up
+#    - rotations: null
+#        - 90
     - flipping:
         - vertical
         - horizontal
@@ -40,17 +38,20 @@ data_creation:
 ---
 
 training:
-  experiment: fix_stuff # name of the experiment
-  epoch: 51 # epoch number
-  batch: 128 # batch number
+  experiment: test_bin_one # name of the experiment
+  epoch: 100 # epoch number
+  batch: 64 # batch number
   output_size: # Output dimension for the model
     height: 128
     width: 128
   save_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
+  data_nature: original # What is the nature of the data (original for usual data)
+  patience: 30 # number of epochs to use until to stop training
+  gradient_clipping: 3 # Gradient clipping value
+  weight_decay: 0.001 # If using weight regularization
   learning_metrics:
-    - "loss"
     - "accuracy"
-    - "dice index"
+    - "hausdorff"
     - "IoU"
   ilr: 0.001
   loss_function: Dice
@@ -72,6 +73,7 @@ training:
   special_operations:
     continually_save_model: false # Continually save the model at the specified data locations
     create_data: false # Create data with the specified data creation section
+    verbose_mode: true # Print epoch progress
 
 ---
 
@@ -79,18 +81,64 @@ testing:
   metrics:
     - hausdorff
     - dice_loss
-
+  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model\\fix_stuff"
+  model_name: model.pth
+  testing_data_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\"
+  experiment_name: "main_binary_experiment"
 ---
 
 graphing:
-  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model\\fix_stuff"
-  model_name: model.pth
-  loss_loc: Graph\\train_loss.pkl
-  data_input_loc: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\standard_experiment"
-  exp_loc: inputs\\epoch_121.pt
-  label_loc: targets\\epoch_121.pt
-  segmentation_res: true
-  model_loss: true
-  hd: true
-  iou: true
-  accuracy: true
+  images: null
+  masks: null
+#  images:
+#    rotation:
+#        location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\inputs\training\epoch_1.pt
+#        classes: 2
+#        colour: false
+#        mri_volume: 2
+#        batch: 80
+#    horizontal_flip:
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\inputs\training\epoch_1.pt
+#      classes: binary
+#      colour: false
+#      mri_volume: 2
+#      batch: 80
+#    vertical_flip:
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\inputs\training\epoch_1.pt
+#      classes: binary
+#      colour: false
+#      mri_volume: 2
+#      batch: 80
+#  masks:
+#    rotation:
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\targets\training\epoch_1.pt
+#      classes: 2
+#      colour: false
+#      batch: 80
+#    horizontal_flip:
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\targets\training\epoch_1.pt
+#      classes: binary
+#      colour: false
+#      batch: 80
+#    vertical_flip:
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\targets\training\epoch_1.pt
+#      classes: binary
+#      colour: false
+#      batch: 80
+  learning_metrics:
+      - Loss_results:
+          recordings:
+            validation_loss: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\validation\Graph\loss.pkl
+            training_loss: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\training\Graph\loss.pkl
+          y_label: Loss Results
+
+
+#  loss_loc: Graph\\train_loss.pkl
+#  data_input_loc: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\standard_experiment"
+#  exp_loc: inputs\\epoch_121.pt
+#  label_loc: targets\\epoch_121.pt
+#  segmentation_res: true
+#  model_loss: true
+#  hd: true
+#  iou: true
+#  accuracy: true
