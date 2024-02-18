@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Accuracy():
-    pass
+SUPPORTED_LOSSES = ["Dice"]
 
 class DiceLoss(nn.Module):
-    def __init__(self, n_classes, softmax=True):
+    def __init__(self, n_classes, function, softmax=True):
         super(DiceLoss, self).__init__()
         self.n_classes = n_classes
         self.softmax = softmax
+        self.metric = function
 
     def _one_hot_encoder(self, input_tensor):
         tensor_list = []
@@ -29,7 +29,12 @@ class DiceLoss(nn.Module):
         loss = 1 - loss
         return loss
 
+    def __loss_function(self, score, target):
+        metric_output = self.function(score, target)
+        return 1 - metric_output
+
     def forward(self, inputs, target, weight=None):
+        # If a softmax layer is required for loggits
         if self.softmax:
             inputs = torch.softmax(inputs, dim=1)
         # target = self._one_hot_encoder(target)

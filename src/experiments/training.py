@@ -7,10 +7,11 @@ import yaml
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
+from torchvision.ops import focal_loss
 
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
-from src.experiments.training.learning_metrics import *
+from src.experiments.training_utils.learning_metrics import *
 from src.models.UNet.unet2d import UNet
 
 
@@ -159,15 +160,18 @@ def validate_model(data_config, model, loss_func,
     validation_imgs, validation_segs = source_instances(epoch_train_path, epoch_seg_path)
     model.eval()
     for v in range(len(validation_imgs)):
+
         img_val = validation_imgs[v]
         seg_val = validation_segs[v]
 
         # Load the train loader
         loader = derive_loader(os.path.join(epoch_train_path, img_val),
-                               os.path.join(epoch_seg_path, seg_val), batch=1)
+                               os.path.join(epoch_seg_path, seg_val))
         with torch.no_grad():
             for i, data in enumerate(loader):
-                # perform a forward pass and calculate the training loss
+                if i >= batch:
+                    break
+                # perform a forward pass and calculate the  loss
                 x = data["image"]
                 y = data["segmentation"]
                 pred = model(x)
@@ -187,7 +191,7 @@ def create_data_source_path(data_config, purpose, data_nature):
 def source_instances(img_path, seg_path):
     """
     Given the path specifications in the data_config, derive a list of all the
-    possible epochs for the training data or validation instances for validation
+    possible epochs for the  training data or validation instances for validation
     :param purpose: either training, validation or testing
     :param data_config: configuration that holds all the data creation sources
     :return:
@@ -197,7 +201,7 @@ def source_instances(img_path, seg_path):
     return image_epochs, segmentation_epochs
 
 
-def derive_loader(img_path, seg_path, batch):
+def derive_loader(img_path, seg_path):
     """
     Given a specific division, be it training, validation or testing
     (specified by option), load the batches of that dataset for the given
@@ -240,7 +244,6 @@ def training(config: BraTS2020Configuration):
     current_metrics = set_up_current_recordings(learning_metrics)
     validation_recordings = set_up_recordings(learning_metrics)
 
-
     # Get experiment name
     exp_name = training_config["experiment"]
     save_path = training_config["save_path"]
@@ -259,13 +262,14 @@ def training(config: BraTS2020Configuration):
     training_epochs, segmentation_epochs = source_instances(epoch_train_path, epoch_seg_path)
 
     for e in range(epoch):
+        if e >= batch:
+            break
         img_epoch = training_epochs[e]
         seg_epoch = segmentation_epochs[e]
 
         # Load the train loader
         train_loader = derive_loader(os.path.join(epoch_train_path, img_epoch),
-                                     os.path.join(epoch_seg_path, seg_epoch),
-                                     batch=batch)
+                                     os.path.join(epoch_seg_path, seg_epoch))
 
         # Train the model and update the metric recordings
         train_model(train_loader, unet, loss_func=loss_func,
@@ -280,13 +284,14 @@ def training(config: BraTS2020Configuration):
 
         # see if early stopping is required
 
-
-
         torch.save({
             'model_state_dict': unet.state_dict(),
             'optim_state_dict': opt.state_dict(),
             'epoch': e,
         }, os.path.join(model_output, "model.pth"))
+
+        save_learning_metrics(save_path, exp_name, training_recordings, "training")
+        save_learning_metrics(save_path, exp_name, validation_recordings, "validation")
 
         # Determine if early stopping is necessary
         best_valid, stagnation = early_stopping(validation_loss=validation_recordings[e],

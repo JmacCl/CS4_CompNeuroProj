@@ -92,7 +92,7 @@ def trainer_synapse(args, model, snapshot_path):
     if args.n_gpu > 1:
         model = nn.DataParallel(model)
 
-    # ---------- training ----------
+    # ---------- training_utils ----------
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
     # optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=0.0001)

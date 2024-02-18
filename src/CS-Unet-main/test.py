@@ -34,7 +34,7 @@ parser.add_argument('--batch_size', type=int, default=24,
                     help='batch_size per gpu')
 parser.add_argument('--img_size', type=int, default=224, help='inputs patch size of network inputs')
 parser.add_argument('--is_savenii', action="store_true", help='whether to save results during inference')
-parser.add_argument('--deterministic', type=int,  default=1, help='whether use deterministic training')
+parser.add_argument('--deterministic', type=int,  default=1, help='whether use deterministic training_utils')
 parser.add_argument('--base_lr', type=float,  default=0.005, help='segmentation network learning rate')
 parser.add_argument('--seed', type=int, default=1234, help='random seed')
 parser.add_argument('--cfg', type=str, required=True, metavar="FILE", help='path to config file', )

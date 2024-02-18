@@ -102,10 +102,10 @@ for epoch in range(N_epoch):
 
 print("finished")
 
-# save validation and training results,
-# if validation diverges, in comparison to training, may more data
+# save validation and training_utils results,
+# if validation diverges, in comparison to training_utils, may more data
 # show simple model works, show that it can make predictions,
-# qualatative results, loss druing training, validation and training loss
+# qualatative results, loss druing training_utils, validation and training_utils loss
 # as soon as I have results
 # status report
 

@@ -10,6 +10,9 @@ from math import floor
 from configparser import ConfigParser
 from typing import List, Tuple, Dict
 from pathlib import Path
+
+import yaml
+
 from src.data.data_processors.brats_data import BraTS2020Data
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
@@ -49,12 +52,10 @@ def map_and_plot(x, batch):
 
 class BratsDataProcessor:
 
-    def __init__(self, config: dict, create_data=True):
+    def __init__(self, config: dict):
         # Set values
-        self.__validate_input(config)
         self.raw_source = Path(config["raw_data_path"])
-        self.processed_data = Path(config["input_data_path"])
-        self.target_masks = Path(config["target_data_path"])
+        self.processed_images_home = Path(config["processed_data_path"])
         self.classes = config["classes"]
         self.selected_mri_volumes: List[str] = config["modals"]
         self.w_bindings: List[int, int] = config["bindings"]["width"]
@@ -65,19 +66,32 @@ class BratsDataProcessor:
         self.data_split = self.__determine_split(config["data_split"])
         self.data_augmentation = self.__process_augmentations(config["data_augmentation"])
 
+        # Start process of creating data
+        self.__process_data()
 
-        # Determine if loading and creating data
+        # Save configuration file format
+        self.__save_config(config)
 
-        if create_data is True:
-            # # Create folders if they don't exist
-            # self.__create_necessary_folders()
-            input_data, target_data = self.__process_data()
-        else:
-            input_data, target_data = self.__load_data()
+# TODO: Add more info to the save configuration file to specify how many files there are in each folder
 
-        # Derive data
-        self.input = input_data
-        self.labels = target_data
+
+
+    def __save_config(self, config):
+        """
+        Given the dictionary that holds all the configurations for how to process the
+        data, save it with the processed data
+        :param config: Dictionary representing data creation configuration
+        :return: create path and dump config and return nothing
+        """
+
+        # Get name of experiment
+        save_path = os.path.join(self.processed_images_home, self.data_name)
+
+        if not os.path.isdir(save_path):
+            os.makedirs(save_path)
+
+        with open(save_path, "rb") as file:
+            yaml.dump(config, file)
 
     # def __create_necessary_folders(self):
     #     """
@@ -108,10 +122,6 @@ class BratsDataProcessor:
         return_dict["testing"] = data_size
 
         return return_dict
-
-
-    def __validate_input(self, config):
-        pass
 
     def __process_augmentations(self, augmentations: List):
         """
@@ -241,23 +251,19 @@ class BratsDataProcessor:
         current_split = self.__determine_split_name(index)
 
         # image data
-        input_path = os.path.join(self.processed_data, self.data_name, data_type,
+        input_path = os.path.join(self.processed_images_home, self.data_name, data_type,
                                   "inputs", current_split)
         if not os.path.exists(input_path):
             os.makedirs(input_path)
         torch.save(image, os.path.join(input_path, "epoch_" + str(index) + ".pt" ))
 
         # Targets
-        target_path = os.path.join(self.target_masks, self.data_name, data_type,
+        target_path = os.path.join(self.processed_images_home, self.data_name, data_type,
                                    "targets", current_split)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
         torch.save(seg, os.path.join(target_path, "epoch_" + str(index) + ".pt" ))
 
-
-
-
-    # def __determine_split(self, count, split_level):
 
     def __brain_data_preprocessing(self, input_path: Path, clip: List[int] = None):
         """
@@ -384,8 +390,8 @@ class BratsDataProcessor:
         This function will retreive the given data
         :return:
         """
-        input_data_loc = Path(os.path.join(self.processed_data, self.data_name, "inputs"))
-        label_data_loc = Path(os.path.join(self.processed_data, self.data_name, "targets"))
+        input_data_loc = Path(os.path.join(self.processed_images_home, self.data_name, "inputs"))
+        label_data_loc = Path(os.path.join(self.processed_images_home, self.data_name, "targets"))
 
         input_data_files = [file for file in os.listdir(input_data_loc) if file.endswith(".pt")]
         label_data_files = [file for file in os.listdir(label_data_loc) if file.endswith(".pt")]

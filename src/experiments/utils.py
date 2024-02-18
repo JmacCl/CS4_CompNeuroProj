@@ -6,7 +6,6 @@ def convert_mask(mask, model:bool, threshold=0.6):
         mask = torch.softmax(mask, dim=0)
     argmax_indices = torch.argmax(mask, dim=0)
 
-
     return argmax_indices
 
 

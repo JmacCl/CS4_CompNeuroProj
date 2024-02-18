@@ -96,7 +96,7 @@ def cal_hausdorff_distance(pred,target):
 
     pred = np.array(pred.contiguous())
     target = np.array(target.contiguous())
-    result = hausdorff_distance(pred,target,distance="euclidean")
+    result = hausdorff_distance(pred, target, distance="euclidean")
 
     return result
 

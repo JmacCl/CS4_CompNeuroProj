@@ -10,6 +10,8 @@ from torch.nn import functional as F
 from src.models.UNet.building_blocks import *
 import torch
 import torchvision.transforms.functional as TF
+
+
 class UNet(nn.Module):
 
     def __init__(self, in_channels=3, classes=1, layers=None):
@@ -32,7 +34,7 @@ class UNet(nn.Module):
 
         self.max_pool_2x2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.final_conv = nn.Conv2d(64, classes, kernel_size=1)
+        self.final_conv = nn.Conv2d(self.layers[-1], classes, kernel_size=1)
 
     def __double_conv(self, in_channels, out_channels):
         conv = nn.Sequential(

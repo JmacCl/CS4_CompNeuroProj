@@ -101,7 +101,7 @@ for epoch in range(N_epoch):
 TestUnet.save('my_model.keras')
 
 
-    # ** training loss is not stored ** #
+    # ** training_utils loss is not stored ** #
 
     # # epoch-end validation
     # temp_out = TestUnet.predict([valid_input])

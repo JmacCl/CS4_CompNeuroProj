@@ -34,7 +34,7 @@ parser.add_argument('--batch_size', type=int,
 parser.add_argument("--n_skip", type=int,default=5)
 parser.add_argument('--n_gpu', type=int, default=1, help='total gpu')
 parser.add_argument('--deterministic', type=int,  default=1,
-                    help='whether use deterministic training')
+                    help='whether use deterministic training_utils')
 parser.add_argument('--base_lr', type=float,  default=0.01,
                     help='segmentation network learning rate')
 parser.add_argument('--base_weight', type=float,  default=0.0005,

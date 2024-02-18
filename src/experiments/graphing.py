@@ -10,7 +10,7 @@ import nibabel as nib
 from torch.utils.data import TensorDataset, DataLoader
 
 from src.experiments.configs.config import BraTS2020Configuration
-from src.experiments.training.loss_functions import DiceLoss
+from src.experiments.training_utils.loss_functions import DiceLoss
 import matplotlib.pyplot as plt
 import numpy as np
 import torch

@@ -5,9 +5,10 @@ data_creation:
   data_name: test_binary_experiment # name of data file for the created data
   classes: 2 # Number of Classes to specify
   modals: # The different modal volumes to use
-    - "flair"
-    - "t2"
+    - "t1"
     - "t1ce"
+    - "t2"
+    - "flair"
   bindings: # Binding dimensions
     height:
       - 56
@@ -19,8 +20,7 @@ data_creation:
       - 13
       - 141
   raw_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\raw"
-  input_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
-  target_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
+  processed_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
   data_split: # How to split the data, represented as decimals
     train: 0.8
     validation: 0.1
@@ -31,10 +31,7 @@ data_creation:
     - flipping:
         - vertical
         - horizontal
-  special_operations:
-    permutate_volumes: false # Create data sets for each MRI mode permutation
-    super_permutate: false # For each mri, do every single combination for each volume
-    data_augmentation: false # Include specified data augmentation
+
 ---
 
 training:
@@ -46,7 +43,7 @@ training:
     width: 128
   save_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
   data_nature: original # What is the nature of the data (original for usual data)
-  patience: 30 # number of epochs to use until to stop training
+  patience: 30 # number of epochs to use until to stop training_utils
   gradient_clipping: 3 # Gradient clipping value
   weight_decay: 0.001 # If using weight regularization
   learning_metrics:
@@ -78,13 +75,16 @@ training:
 ---
 
 testing:
+  batch: 64
   metrics:
     - hausdorff
     - dice_loss
-  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model\\fix_stuff"
-  model_name: model.pth
-  testing_data_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\"
+  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
   experiment_name: "main_binary_experiment"
+  model_name: model.pth
+  data_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\"
+  data_name: "test_binary_experiment"
+
 ---
 
 graphing:
@@ -92,36 +92,36 @@ graphing:
   masks: null
 #  images:
 #    rotation:
-#        location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\inputs\training\epoch_1.pt
+#        location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\inputs\training_utils\epoch_1.pt
 #        classes: 2
 #        colour: false
 #        mri_volume: 2
 #        batch: 80
 #    horizontal_flip:
-#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\inputs\training\epoch_1.pt
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\inputs\training_utils\epoch_1.pt
 #      classes: binary
 #      colour: false
 #      mri_volume: 2
 #      batch: 80
 #    vertical_flip:
-#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\inputs\training\epoch_1.pt
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\inputs\training_utils\epoch_1.pt
 #      classes: binary
 #      colour: false
 #      mri_volume: 2
 #      batch: 80
 #  masks:
 #    rotation:
-#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\targets\training\epoch_1.pt
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\targets\training_utils\epoch_1.pt
 #      classes: 2
 #      colour: false
 #      batch: 80
 #    horizontal_flip:
-#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\targets\training\epoch_1.pt
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\horizontal_flip\targets\training_utils\epoch_1.pt
 #      classes: binary
 #      colour: false
 #      batch: 80
 #    vertical_flip:
-#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\targets\training\epoch_1.pt
+#      location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\vertical_flip\targets\training_utils\epoch_1.pt
 #      classes: binary
 #      colour: false
 #      batch: 80

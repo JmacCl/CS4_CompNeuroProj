@@ -1,8 +1,9 @@
 import torch
 
-from scipy.spatial.distance import directed_hausdorff
+import numpy as np
 from src.experiments.utils import convert_mask
-from src.experiments.training.loss_functions import *
+from src.experiments.training_utils.loss_functions import *
+from hausdorff import hausdorff_distance
 
 
 def pixel_accuracy(original, predictions):
@@ -59,6 +60,15 @@ def intersection_over_union(original, predictions):
 
     return iou
 
+def dice_loss(score, target):
+    target = target.float()
+    smooth = 1e-5
+    intersect = torch.sum(score * target)
+    y_sum = torch.sum(target * target)
+    z_sum = torch.sum(score * score)
+    loss = (2 * intersect + smooth) / (z_sum + y_sum + smooth)
+    return loss
+
 
 def hausdorff_distance(original, predictions, model=False, threshold=0.6):
     """
@@ -75,15 +85,13 @@ def hausdorff_distance(original, predictions, model=False, threshold=0.6):
     """
     # Convert the binary masks to 0s and 1s
     original_binary = convert_mask(original.squeeze(0), model=False)
+    original_binary = original_binary.cpu()
 
     # Process model predictions
     predictions_binary = convert_mask(predictions.squeeze(0), model=True)
-    # Get the coordinates of the foreground pixels
-    original_coords = torch.nonzero(original_binary).float()
-    predictions_coords = torch.nonzero(predictions_binary).float()
-    # Calculate Hausdorff Distance
-    distance_original_to_pred = directed_hausdorff(original_coords.numpy(), predictions_coords.numpy())[0]
-    distance_pred_to_original = directed_hausdorff(predictions_coords.numpy(), original_coords.numpy())[0]
-    # Use the maximum distance as the final result
-    distance = max(distance_original_to_pred, distance_pred_to_original)
+    predictions_binary = predictions_binary.cpu()
+
+    # convert torch arrays into np arrays
+    distance = hausdorff_distance(original_binary.numpy(), predictions_binary.numpy(),
+                                  distance="euclidean")
     return distance
