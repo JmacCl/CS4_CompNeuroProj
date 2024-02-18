@@ -67,10 +67,7 @@ training:
       kernel: 3
       stride: 1
       max_pool: 2
-  special_operations:
-    continually_save_model: false # Continually save the model at the specified data locations
-    create_data: false # Create data with the specified data creation section
-    verbose_mode: true # Print epoch progress
+  verbose_mode: true # Print epoch progress
 
 ---
 

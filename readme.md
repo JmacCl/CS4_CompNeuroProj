@@ -10,7 +10,7 @@ instructions to run automated tests.
 
 ### Requirements
 
-* Python 3.7
+* Python 3.11
 * Packages: listed in `requirements.txt` 
 * Tested on Windows 10
 
