@@ -256,6 +256,7 @@ def training(config: BraTS2020Configuration):
     print("[INFO] training the network...")
     epoch = training_config["epoch"]
     batch = training_config["batch"]
+    verbose_mode = training_config["verbose"]
     # Get training
     data_nature = training_config["data_nature"]
     epoch_train_path, epoch_seg_path = create_data_source_path(data_config, "training", data_nature)
@@ -264,6 +265,8 @@ def training(config: BraTS2020Configuration):
     for e in range(epoch):
         if e >= batch:
             break
+        if verbose_mode:
+            print(e)
         img_epoch = training_epochs[e]
         seg_epoch = segmentation_epochs[e]
 
