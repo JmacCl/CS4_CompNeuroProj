@@ -5,11 +5,11 @@ import torch.nn.functional as F
 SUPPORTED_LOSSES = ["Dice"]
 
 class DiceLoss(nn.Module):
-    def __init__(self, n_classes, function, softmax=True):
+    def __init__(self, n_classes, softmax=True):
         super(DiceLoss, self).__init__()
         self.n_classes = n_classes
         self.softmax = softmax
-        self.metric = function
+
 
     def _one_hot_encoder(self, input_tensor):
         tensor_list = []

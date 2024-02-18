@@ -87,10 +87,12 @@ class BratsDataProcessor:
         # Get name of experiment
         save_path = os.path.join(self.processed_images_home, self.data_name)
 
+        yaml_name = "data_config.yaml"
+
         if not os.path.isdir(save_path):
             os.makedirs(save_path)
 
-        with open(save_path, "rb") as file:
+        with open(os.path.join(save_path, yaml_name), "rb") as file:
             yaml.dump(config, file)
 
     # def __create_necessary_folders(self):

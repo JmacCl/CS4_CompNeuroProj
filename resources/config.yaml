@@ -19,21 +19,17 @@ data_creation:
     pictures:
       - 13
       - 141
-  raw_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\raw"
-  processed_data_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed"
+  raw_data_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\raw
+  processed_data_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed
   data_split: # How to split the data, represented as decimals
     train: 0.8
     validation: 0.1
     testing: 0.1
   data_augmentation:
-#    - rotations: null
-#        - 90
     - flipping:
         - vertical
         - horizontal
-
 ---
-
 training:
   experiment: test_bin_one # name of the experiment
   epoch: 100 # epoch number
@@ -41,7 +37,7 @@ training:
   output_size: # Output dimension for the model
     height: 128
     width: 128
-  save_path: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
+  save_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model
   data_nature: original # What is the nature of the data (original for usual data)
   patience: 30 # number of epochs to use until to stop training_utils
   gradient_clipping: 3 # Gradient clipping value
@@ -68,6 +64,10 @@ training:
       stride: 1
       max_pool: 2
   verbose_mode: true # Print epoch progress
+  selected_mri:
+    t1ce: 1
+    t2: 2
+    flair: 3
 
 ---
 
@@ -129,13 +129,3 @@ graphing:
             training_loss: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\training\Graph\loss.pkl
           y_label: Loss Results
 
-
-#  loss_loc: Graph\\train_loss.pkl
-#  data_input_loc: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\standard_experiment"
-#  exp_loc: inputs\\epoch_121.pt
-#  label_loc: targets\\epoch_121.pt
-#  segmentation_res: true
-#  model_loss: true
-#  hd: true
-#  iou: true
-#  accuracy: true

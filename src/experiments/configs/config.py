@@ -19,7 +19,7 @@ class BraTS2020Configuration:
         data = self.__determine_file(config)
         # Process data into a python dictionary, depending on if it is accepted
         self.data_creation = data["data_creation"]
-        self.training = data["training_utils"]
+        self.training = data["training"]
         self.testing = data["testing"]
         self.graphing = data["graphing"]
 
@@ -59,7 +59,7 @@ class BraTS2020Configuration:
 
         config = self.config
         return_dic["main"] = config["main"]
-        return_dic["training_utils"] = config["training_utils"]
+        return_dic["training"] = config["training"]
         return_dic["alg_set_up"] = config["alg_set_up"]
 
         return return_dic

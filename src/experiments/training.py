@@ -2,12 +2,10 @@ import os
 import pickle
 import sys
 
-import torch
 import yaml
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
-from torchvision.ops import focal_loss
 
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
@@ -49,6 +47,7 @@ def process_metrics(results, current, batch_count):
         results[key] = old
         current[key] = 0
 
+
 def configure_learning_recordings(training_config: dict):
     recordings = {"loss": []}
     defined_metrics = training_config["learning_metrics"]
@@ -56,6 +55,7 @@ def configure_learning_recordings(training_config: dict):
         recordings[met] = []
 
     return recordings
+
 
 def set_up_functions(training_config: dict):
     return_dic = {}
@@ -68,17 +68,20 @@ def set_up_functions(training_config: dict):
             return_dic[key] = intersection_over_union
     return return_dic
 
+
 def set_up_recordings(defined_metrics: list):
     current_recordings = {"loss": []}
     for met in defined_metrics:
         current_recordings[met] = []
     return current_recordings
 
+
 def set_up_current_recordings(defined_metrics: list):
     current_recordings = {"loss": 0}
     for met in defined_metrics:
         current_recordings[met] = 0
     return current_recordings
+
 
 def create_data_path(path, dataset_name, data_nature, purpose: str):
     """
@@ -116,17 +119,18 @@ def train_model(loader, model, loss_func,
         # add the loss to the total training loss so far
         update_metrics(loss.item(), y, pred, learning_metrics, learning_functions)
 
+
 def update_validation_results(validaiton_results, current, batch_count):
     for key in current.keys():
         old = current[key]
         validaiton_results[key] += old / batch_count
         current[key] = 0
 
+
 def early_stopping(validation_loss, stagnation, best_valid):
     """
     Given the current stagnation score, determine fi the validation is poor
     enough to warrant stopping the training process
-    :param patience:
     :param validation_loss:
     :param stagnation:
     :param best_valid:
@@ -140,9 +144,10 @@ def early_stopping(validation_loss, stagnation, best_valid):
 
     return best_valid, stagnation
 
+
 def validate_model(data_config, model, loss_func,
                    validation_recordings, learning_functions,
-                   batch, augmentation):
+                   batch, augmentation, mri_vols):
     """
     Validate the model with information from the data configuration and the model
     :param batch:
@@ -166,7 +171,8 @@ def validate_model(data_config, model, loss_func,
 
         # Load the train loader
         loader = derive_loader(os.path.join(epoch_train_path, img_val),
-                               os.path.join(epoch_seg_path, seg_val))
+                               os.path.join(epoch_seg_path, seg_val),
+                               mri_vols=mri_vols)
         with torch.no_grad():
             for i, data in enumerate(loader):
                 if i >= batch:
@@ -181,6 +187,7 @@ def validate_model(data_config, model, loss_func,
             update_validation_results(validation_results, batch_results, batch)
     process_metrics(validation_recordings, validation_results, batch_count=len(validation_imgs))
 
+
 def create_data_source_path(data_config, purpose, data_nature):
     data_path = data_config["input_data_path"]
     dataset_name = data_config["data_name"]
@@ -188,12 +195,13 @@ def create_data_source_path(data_config, purpose, data_nature):
 
     return img_path, seg_path
 
+
 def source_instances(img_path, seg_path):
     """
     Given the path specifications in the data_config, derive a list of all the
     possible epochs for the  training data or validation instances for validation
-    :param purpose: either training, validation or testing
-    :param data_config: configuration that holds all the data creation sources
+    :param seg_path:
+    :param img_path:
     :return:
     """
     image_epochs = [file for file in sorted(os.listdir(img_path)) if file.endswith('.pt')]
@@ -201,7 +209,7 @@ def source_instances(img_path, seg_path):
     return image_epochs, segmentation_epochs
 
 
-def derive_loader(img_path, seg_path):
+def derive_loader(img_path, seg_path, mri_vols):
     """
     Given a specific division, be it training, validation or testing
     (specified by option), load the batches of that dataset for the given
@@ -211,18 +219,18 @@ def derive_loader(img_path, seg_path):
     :param batch:
     :return:
     """
-    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path)
+    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols)
     loader = DataLoader(dataset, shuffle=True, batch_size=1)
     return loader
 
 
 def training(config: BraTS2020Configuration):
-
     # Set up Model parameters
     training_config = config.training
     data_config = config.data_creation
     classes = data_config["classes"]
-    channels = len(data_config["modals"])
+    selected_mri_vols = training_config["selected_mri"]
+    channels = len(selected_mri_vols)
     unet = UNet(in_channels=channels, classes=classes)
 
     # Set up main training hyperparameters
@@ -272,7 +280,8 @@ def training(config: BraTS2020Configuration):
 
         # Load the train loader
         train_loader = derive_loader(os.path.join(epoch_train_path, img_epoch),
-                                     os.path.join(epoch_seg_path, seg_epoch))
+                                     os.path.join(epoch_seg_path, seg_epoch),
+                                     mri_vols=selected_mri_vols)
 
         # Train the model and update the metric recordings
         train_model(train_loader, unet, loss_func=loss_func,
@@ -281,7 +290,8 @@ def training(config: BraTS2020Configuration):
 
         validate_model(data_config, unet, loss_func=loss_func,
                        validation_recordings=validation_recordings,
-                       learning_functions=lm_funcs, batch=batch, augmentation=data_nature)
+                       learning_functions=lm_funcs, batch=batch, augmentation=data_nature,
+                       mri_vols=selected_mri_vols)
 
         process_metrics(training_recordings, current_metrics, batch_count=batch)
 
@@ -302,7 +312,7 @@ def training(config: BraTS2020Configuration):
         if stagnation >= patience:
             break
     # print("Epoch completed and model successfully saved!")
-        #
+    #
 
     # Save the experiment deep learning model
     model_output = os.path.join(save_path, exp_name)
@@ -313,7 +323,6 @@ def training(config: BraTS2020Configuration):
     # Save the loss and other defined metrics for training and validation
     save_learning_metrics(save_path, exp_name, training_recordings, "training")
     save_learning_metrics(save_path, exp_name, validation_recordings, "validation")
-
 
 
 def save_config(config, training_config):
@@ -337,6 +346,7 @@ def save_config(config, training_config):
     # Save the loaded data to the new YAML file
     with open(os.path.join(model_output, experiment_config), 'w') as file:
         yaml.dump(loaded_data, file)
+
 
 if __name__ == "__main__":
     config = BraTS2020Configuration(sys.argv[1])

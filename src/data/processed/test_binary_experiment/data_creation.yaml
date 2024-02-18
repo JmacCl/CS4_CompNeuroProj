@@ -1,0 +1,32 @@
+
+
+---
+data_creation:
+  data_name: test_binary_experiment # name of data file for the created data
+  classes: 2 # Number of Classes to specify
+  modals: # The different modal volumes to use
+    - "t1"
+    - "t1ce"
+    - "t2"
+    - "flair"
+  bindings: # Binding dimensions
+    height:
+      - 56
+      - 184
+    width:
+      - 56
+      - 184
+    pictures:
+      - 13
+      - 141
+  raw_data_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\raw
+  processed_data_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed
+  data_split: # How to split the data, represented as decimals
+    train: 0.8
+    validation: 0.1
+    testing: 0.1
+  data_augmentation:
+    - flipping:
+        - vertical
+        - horizontal
+
