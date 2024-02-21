@@ -10,12 +10,11 @@ import nibabel as nib
 from torch.utils.data import TensorDataset, DataLoader
 
 from src.experiments.configs.config import BraTS2020Configuration
+from src.experiments.utility_functions.data_access import *
 from src.experiments.training_utils.loss_functions import DiceLoss
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import cv2
-import torch.nn.functional as F
 
 import os
 
@@ -51,6 +50,23 @@ def prepare_plot(origImage):
     figure.tight_layout()
     figure.show()
 
+def plot_experiment_images(image, seg, model_seg):
+    figure, ax = plt.subplots(nrows=3, ncols=1, figsize=(10, 10))
+    # plot the original image, its mask, and the predicted mask
+    ax[0].imshow(image, cmap="gray")
+    ax[0].set_title("Image")
+
+    ax[1].imshow(seg, cmap="gray")
+    ax[1].set_title("Original Segmentation")
+
+    ax[2].imshow(model_seg, cmap="gray")
+    ax[2].set_title("Model Segmentation")
+
+    # set the titles of the subplots
+    # set the layout of the figure and display it
+    figure.tight_layout()
+    figure.show()
+
 # def examine_binary_softmax_predictions(original, predictions):
 #     # Derive the argmax values for the original
 #     argmax_indices = torch.argmax(original, dim=0)
@@ -77,8 +93,6 @@ def prepare_plot(origImage):
 
 
 
-
-
 def convert_mask(mask, model:bool, threshold=0.6):
     if model:
         mask = torch.softmax(mask, dim=0)
@@ -86,27 +100,6 @@ def convert_mask(mask, model:bool, threshold=0.6):
     segmentation_np = argmax_indices.cpu().numpy()
 
     return segmentation_np
-
-# def image_reveal(img, batch, dim):
-#     # convert image
-#     img_batch = img[batch]
-#     img_batch = img_batch.squeeze(0)
-#     np_ver = img_batch.numpy()
-#
-#     np_ver = np.transpose(np_ver, (1, 2, 0))
-#     return np_ver[:, :, dim]
-
-# def make_predictions(model, batch, mask, b):
-#     # set model to evaluation mode
-#     model.eval()
-#     # turn off gradient tracking
-#     batch_selection = batch[b].unsqueeze(0)
-#     with torch.no_grad():
-#         predMask = model(batch_selection)
-#         origMask = mask[b]
-#         predMask = predMask.squeeze(0)
-#
-#         return image_reveal(batch, b, 0), convert_mask(origMask, False), convert_mask(predMask, True)
 
 def plot_learning_metrics(metrics: Dict):
     """
@@ -138,41 +131,27 @@ def plot_learning_metrics(metrics: Dict):
     plt.legend()
     plt.show()
 
-def process_image(image_location, dim, batch = None):
+def process_image_graph(data_tensor, dim):
     """
-    This function should take the location of a pytorch data file and process it
-    for a image graphing function
+    Take a given image tensor and process it so that it can be graphed
     :param image_location:
     :return:
     """
-    # Load the file
-    data_tensor = torch.load(image_location)
-    # Derive a random batch
-    if batch is None:
-        batch_size = data_tensor.size(0)
-        random_batch = random.choice(list(range(batch_size)))
-        image_tensor = data_tensor[random_batch]
-    else:
-        image_tensor = data_tensor[batch]
 
     # Process it into a numpy array and return
-    img_batch = image_tensor.squeeze(0)
+    img_batch = data_tensor.squeeze(0)
     np_ver = img_batch.numpy()
 
     np_ver = np.transpose(np_ver, (1, 2, 0))
-    return np_ver[:, :, dim]
+    return np_ver[:, :, dim-1]
 
-def process_mask(mask_location,  model:bool, threshold=0.6, batch=None):
-    # Load the file
-    data_tensor = torch.load(mask_location)
-    # Derive a random batch
-    if batch is None:
-        batch_size = data_tensor.size(0)
-        random_batch = random.choice(list(range(batch_size)))
-        mask = data_tensor[random_batch]
-    else:
-        mask = data_tensor[batch]
-
+def process_mask_graph(mask,  model:bool):
+    """
+    Take a given segmentation torch tensor and process it so it can be graphed
+    :param mask:
+    :param model:
+    :return:
+    """
     if model:
         mask = torch.softmax(mask, dim=0)
     argmax_indices = torch.argmax(mask, dim=0)
@@ -180,25 +159,99 @@ def process_mask(mask_location,  model:bool, threshold=0.6, batch=None):
 
     return segmentation_np
 
-def graphing(config: dict):
-    # Plot images
-    images = config["images"]
-    if images != None:
-        for specs in images:
-            volume = images[specs]["mri_volume"]
-            loc = images[specs]["location"]
-            batch = images[specs]["batch"]
-            img = process_image(loc, volume, batch)
-            prepare_plot(img)
+# def convert_numpy(tensor, if_img):
+#     """
+#     Given a torch tensor, convert it to a numpy array
+#     :param tensor:
+#     :return:
+#     """
+#     img_batch = tensor.squeeze(0)
+#     np_ver = img_batch.cpu().numpy()
+#     if if_img:
+#         np_ver = np.transpose(np_ver, (1, 2, 0))
+#     return np_ver
 
-    # Plot masks
-    images = config["masks"]
-    if images != None:
-        for specs in images:
-            loc = images[specs]["location"]
-            batch = images[specs]["batch"]
-            img = process_mask(loc, False, batch=batch)
-            prepare_plot(img)
+def random_instance():
+    pass
+
+def set_up_model_image(path, mri_volumes, batch, seg):
+    """
+    Derive data from either a image path or seg path and format it
+    into the desired form, via the mri specifications and the specified batch
+    :param path:
+    :param mri_volumes:
+    :param batch:
+    :param seg:
+    :return:
+    """
+
+    data = torch.load(path)
+    if seg is False:
+        return data[batch, mri_volumes, :, :]
+    else:
+        return data[batch, :, :, :]
+
+def graph_experiment_output(experiment: dict):
+    """
+    Given the defined format for the output of an experiment,
+    create graphs of the image, true segmentation masks and output segmentation mask
+    given the model
+    :param experiment:
+    :return:
+    """
+    experiment_name = list(experiment.keys())[0]
+    data_information = experiment[experiment_name]["data_info"]
+    mri_volumes = list(data_information["selected_mri"].values())
+    selected_mri = data_information["mri_volume"]
+
+    # Source the experiment files
+    img_path = experiment[experiment_name]["input_image_path"]
+    seg_path = experiment[experiment_name]["input_seg_path"]
+    img_files, seg_files = source_instances(img_path, seg_path)
+
+    # Derive the torch image and segmentation
+    if data_information["batch"] is not None and data_information["instance"] is not None:
+        batch = data_information["batch"]
+        instance = data_information["instance"]
+    else:
+        batch, instance = random_instance()
+
+    test_img = set_up_model_image(os.path.join(img_path, img_files[instance]),
+                                  batch=batch,
+                                  mri_volumes=mri_volumes,
+                                  seg=False)
+
+    test_seg = set_up_model_image(os.path.join(seg_path, seg_files[instance]),
+                                  batch=batch, mri_volumes=mri_volumes, seg=True)
+
+
+    # Source the model and get prediction results
+    model = torch.load(os.path.join(experiment[experiment_name]["directory_path"],
+                                    experiment_name,
+                                    experiment[experiment_name]["model_name"]))
+
+    model.eval()
+    with torch.no_grad():
+        output_seg = model(test_img.unsqueeze(0))
+
+    # Reformat the data, so it is ready for graphing
+    img_graph = process_image_graph(test_img, selected_mri)
+    seg_graph = process_mask_graph(test_seg, model=False)
+    result_graph = process_mask_graph(output_seg.squeeze(0), model=True)
+
+    # Graph results
+    plot_experiment_images(img_graph, seg_graph, result_graph)
+
+
+
+
+def graphing(config: dict):
+    # Plot single images
+
+    # Plot experiment results
+    experiments = config["experiments"]
+    for exp in experiments:
+        graph_experiment_output(exp)
 
     # Plot Learning metrics or Evaluation Results
 

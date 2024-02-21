@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 from keras_unet_collection import models
-from src.experiments.utils import convert_num_to_string
+from src.experiments.utility_functions import convert_num_to_string
 from src.uneeded.utils.brain_data_preprocessing import brain_data_preprocessing
 
 TRAIN_PATH = "/src/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"

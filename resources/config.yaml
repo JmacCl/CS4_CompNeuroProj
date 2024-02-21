@@ -2,7 +2,7 @@
 
 ---
 data_creation:
-  data_name: test_binary_experiment # name of data file for the created data
+  data_name: try_fix_rotations # name of data file for the created data
   classes: 2 # Number of Classes to specify
   modals: # The different modal volumes to use
     - "t1"
@@ -29,11 +29,13 @@ data_creation:
     - flipping:
         - vertical
         - horizontal
+    - rotation:
+        - 90
 ---
 training:
   experiment: test_bin_one # name of the experiment
-  epoch: 100 # epoch number
-  batch: 64 # batch number
+  epoch: 50 # epoch number
+  batch: 32 # batch number
   output_size: # Output dimension for the model
     height: 128
     width: 128
@@ -41,12 +43,12 @@ training:
   data_nature: original # What is the nature of the data (original for usual data)
   patience: 30 # number of epochs to use until to stop training_utils
   gradient_clipping: 3 # Gradient clipping value
-  weight_decay: 0.001 # If using weight regularization
+  weight_decay: 0.001 # If using L2 weight regularization
   learning_metrics:
     - "accuracy"
     - "hausdorff"
     - "IoU"
-  ilr: 0.001
+  ilr: 0.0001
   loss_function: Dice
   optimizer: ADAM
   alg_set_up:
@@ -54,7 +56,9 @@ training:
     parameters:
       building_block:
         - conv2d
+        - dropout
         - conv2d
+        - batch_normalization
         - relu
       stacks:
         - 16
@@ -63,7 +67,10 @@ training:
       kernel: 3
       stride: 1
       max_pool: 2
+      normalization: true
+      dropout: true
   verbose_mode: true # Print epoch progress
+  GPU: cuda
   selected_mri:
     t1ce: 1
     t2: 2
@@ -72,21 +79,51 @@ training:
 ---
 
 testing:
-  batch: 64
+  batch: 32
   metrics:
     - hausdorff
-    - dice_loss
-  experiment_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\experiments\\saved_model"
-  experiment_name: "main_binary_experiment"
+    - dice
+  experiment_location: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model
+  experiment_name: test_bin_one
   model_name: model.pth
-  data_location: "C:\\Users\\james\\Uni_Projects\\CS4_CompNeuroProj\\src\\data\\processed\\"
-  data_name: "test_binary_experiment"
+  data_location:  D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed
+  data_name: test_binary_experiment
+  selected_mri:
+    t1ce: 1
+    t2: 2
+    flair: 3
+  GPU: cuda
 
 ---
 
 graphing:
-  images: null
-  masks: null
+  single_images: null
+  experiments:
+    - test_bin_one:
+        model_name: model.pth
+        directory_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model
+        input_image_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\original\inputs\testing
+        input_seg_path: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\original\targets\testing
+        data_info:
+          selected_mri:
+            t1ce: 1
+            t2: 2
+            flair: 3
+          classes: 2
+          batch: 50
+          instance: 15
+          mri_volume: 3
+  learning_metrics:
+    - Loss_results:
+        recordings:
+          validation_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\validation\Graph\loss.pkl
+          training_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\training\Graph\loss.pkl
+        y_label: Loss Results
+    - Hausdorff_Results:
+        recordings:
+          validation_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\validation\Graph\hausdorff.pkl
+          training_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\training\Graph\hausdorff.pkl
+        y_label: Hausdorff Results
 #  images:
 #    rotation:
 #        location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\inputs\training_utils\epoch_1.pt
@@ -122,10 +159,5 @@ graphing:
 #      classes: binary
 #      colour: false
 #      batch: 80
-  learning_metrics:
-      - Loss_results:
-          recordings:
-            validation_loss: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\validation\Graph\loss.pkl
-            training_loss: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\experiments\saved_model\test_bin_one\training\Graph\loss.pkl
-          y_label: Loss Results
+
 

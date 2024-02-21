@@ -1,9 +1,10 @@
 import torch
 
 import numpy as np
+import numba
 from src.experiments.utils import convert_mask
 from src.experiments.training_utils.loss_functions import *
-from hausdorff import hausdorff_distance
+from hausdorff import hausdorff_distance as hd
 
 
 def pixel_accuracy(original, predictions):
@@ -60,17 +61,47 @@ def intersection_over_union(original, predictions):
 
     return iou
 
-def dice_loss(score, target):
-    target = target.float()
-    smooth = 1e-5
-    intersect = torch.sum(score * target)
-    y_sum = torch.sum(target * target)
-    z_sum = torch.sum(score * score)
-    loss = (2 * intersect + smooth) / (z_sum + y_sum + smooth)
-    return loss
+
+# def odice_loss(score, target):
+#     # Convert the binary masks to 0s and 1s
+#     original_binary = convert_mask(target.squeeze(0), model=False)
+#
+#     # Process model predictions
+#     score = convert_mask(score.squeeze(0), model=True)
+#     target = original_binary.float()
+#     smooth = 1e-5
+#     intersect = torch.sum(score * target)
+#     y_sum = torch.sum(target * target)
+#     z_sum = torch.sum(score * score)
+#     loss = (2 * intersect + smooth) / (z_sum + y_sum + smooth)
+#     return loss.item()
+
+def dice(original, predictions):
+    """
+    Implementation for dice coefficient/ f1 score for evaluation metric
+    :param original: original mask
+    :param predictions: predictions from the model
+    :return:
+    """
+    # Convert the binary masks to 0s and 1s
+    original_binary = convert_mask(original.squeeze(0), model=False)
+
+    # Process model predictions
+    predictions_binary = convert_mask(predictions.squeeze(0), model=True)
 
 
-def hausdorff_distance(original, predictions, model=False, threshold=0.6):
+    # Derive the given metrics
+    intersection = torch.sum(original_binary * predictions_binary).item()
+    union = len(torch.unique(torch.cat((original_binary, predictions_binary))))
+    numerator = 2 * intersection
+    denominator = union + intersection
+
+    return numerator/denominator
+
+
+
+
+def hausdorff_distance(original, predictions, distance):
     """
     Calculate Hausdorff Distance for binary segmentation.
 
@@ -92,6 +123,6 @@ def hausdorff_distance(original, predictions, model=False, threshold=0.6):
     predictions_binary = predictions_binary.cpu()
 
     # convert torch arrays into np arrays
-    distance = hausdorff_distance(original_binary.numpy(), predictions_binary.numpy(),
-                                  distance="euclidean")
+    distance = hd(original_binary.numpy(), predictions_binary.numpy(),
+                  distance=distance)
     return distance

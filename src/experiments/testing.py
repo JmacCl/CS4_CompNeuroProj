@@ -10,7 +10,7 @@ from src.experiments.datasets.BraTS2020 import BraTS2020Data
 from src.experiments.training import create_data_source_path, source_instances, create_data_path
 from src.experiments.testing_utils.metrics import *
 
-def derive_loader(img_path, seg_path):
+def derive_loader(img_path, seg_path, mri_vols, device):
     """
     Given a specific division, be it training, validation or testing
     (specified by option), load the batches of that dataset for the given
@@ -20,7 +20,7 @@ def derive_loader(img_path, seg_path):
     :param batch:
     :return:
     """
-    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path)
+    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols, device=device)
     loader = DataLoader(dataset, shuffle=True, batch_size=1)
     return loader
 
@@ -90,7 +90,9 @@ def save_test_results(final_scores, test_sample, experiment_path, experiment_nam
     for key in final_scores.keys():
         item = {"score": final_scores[key]/test_sample, "test_index": test_sample}
         save_results[key] = item
-    with open(os.path.join(experiment_path, experiment_name + "_results.pkl", "rb")) as file:
+    save_path = os.path.join(experiment_path, experiment_name + "_results.pkl")
+
+    with open(save_path, "wb") as file:
         pickle.dump(save_results, file)
 
 def testing(testing_config: dict):
@@ -108,6 +110,9 @@ def testing(testing_config: dict):
     experiment_path = os.path.join(experiment_location, experiment_name)
     model_location = os.path.join(experiment_path, model_name)
     model = torch.load(model_location)
+    gpu = testing_config["GPU"]
+    if gpu:
+        model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     # Obtain the testing files
     data_location = testing_config["data_location"]
@@ -122,23 +127,27 @@ def testing(testing_config: dict):
     final_scores = set_up_testing_scores(metric_dict=metric_functions)
     batch = testing_config["batch"]
     test_size = len(testing_images)
+    mri_vols = testing_config["selected_mri"]
 
     for i in range(test_size):
 
         test_img = testing_images[i]
         test_mask = testing_images[i]
         loader = derive_loader(os.path.join(epoch_train_path, test_img),
-                               os.path.join(epoch_seg_path, test_mask))
+                               os.path.join(epoch_seg_path, test_mask),
+                               mri_vols=mri_vols, device=gpu)
         test_model(model=model, loader=loader,
                    batch=batch, metric_score=metric_score,
                    metric_function=metric_functions)
         process_batch_scores(metric_score, final_scores, batch)
 
-        save_test_results(final_scores, test_sample=i,
+        save_test_results(final_scores, test_sample=i+1,
                           experiment_path=experiment_path,
                           experiment_name=experiment_name)
 
     finalize_test_scores(final_scores, test_size)
+
+    print(final_scores)
 
 
 

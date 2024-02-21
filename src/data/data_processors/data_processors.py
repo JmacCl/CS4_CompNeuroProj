@@ -213,13 +213,13 @@ class BratsDataProcessor:
         count = 1
         for i in indices:
             image, seg = self.__collect_data(i, volume_holder, seg_list)
-            self.__save_epoch(image, seg, "original", index=count)
+            self.__save_instances(image, seg, "original", index=count)
             for keys, augs in self.data_augmentation.items():
                 if keys == "mix_up":
                     dl_img, dl_seg = self.__augment_by_loader(image, seg, function=augs)
-                    self.__save_epoch(dl_img, dl_seg, keys, index=count)
+                    self.__save_instances(dl_img, dl_seg, keys, index=count)
                 else:
-                    self.__save_epoch(augs(image), augs(seg), keys, index=count)
+                    self.__save_instances(augs(image), augs(seg), keys, index=count)
             count += 1
 
     def __determine_split_name(self, count):
@@ -244,7 +244,7 @@ class BratsDataProcessor:
         return torch.stack(images, dim=0), torch.stack(segs, dim=0)
 
 
-    def __save_epoch(self, image, seg, data_type, index):
+    def __save_instances(self, image, seg, data_type, index):
         """
         Given a Dataloader that represents a data epoch, and save the files to the defined file
         :param loader:
@@ -257,14 +257,14 @@ class BratsDataProcessor:
                                   "inputs", current_split)
         if not os.path.exists(input_path):
             os.makedirs(input_path)
-        torch.save(image, os.path.join(input_path, "epoch_" + str(index) + ".pt" ))
+        torch.save(image, os.path.join(input_path, "instance_" + str(index) + ".pt" ))
 
         # Targets
         target_path = os.path.join(self.processed_images_home, self.data_name, data_type,
                                    "targets", current_split)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
-        torch.save(seg, os.path.join(target_path, "epoch_" + str(index) + ".pt" ))
+        torch.save(seg, os.path.join(target_path, "instance_" + str(index) + ".pt" ))
 
 
     def __brain_data_preprocessing(self, input_path: Path, clip: List[int] = None):

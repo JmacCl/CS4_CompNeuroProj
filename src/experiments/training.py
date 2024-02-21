@@ -102,17 +102,20 @@ def create_data_path(path, dataset_name, data_nature, purpose: str):
 
 def train_model(loader, model, loss_func,
                 opt, learning_metrics, learning_functions,
-                clip_value):
+                clip_value, batch):
     model.train()
     for i, data in enumerate(loader):
+        if i >= batch:
+            break
         # perform a forward pass and calculate the training loss
         x = data["image"]
         y = data["segmentation"]
+        opt.zero_grad()
+
         pred = model(x)
         loss = loss_func(pred, y)
         # first, zero out any previously accumulated gradients, then
         # perform backpropagation, and then update model parameters
-        opt.zero_grad()
         loss.backward()
         clip_grad_norm_(model.parameters(), clip_value)
         opt.step()
@@ -120,10 +123,10 @@ def train_model(loader, model, loss_func,
         update_metrics(loss.item(), y, pred, learning_metrics, learning_functions)
 
 
-def update_validation_results(validaiton_results, current, batch_count):
+def update_validation_results(validation_results, current, batch_count):
     for key in current.keys():
         old = current[key]
-        validaiton_results[key] += old / batch_count
+        validation_results[key] += old / batch_count
         current[key] = 0
 
 
@@ -147,7 +150,7 @@ def early_stopping(validation_loss, stagnation, best_valid):
 
 def validate_model(data_config, model, loss_func,
                    validation_recordings, learning_functions,
-                   batch, augmentation, mri_vols):
+                   batch, augmentation, mri_vols, device):
     """
     Validate the model with information from the data configuration and the model
     :param batch:
@@ -172,7 +175,7 @@ def validate_model(data_config, model, loss_func,
         # Load the train loader
         loader = derive_loader(os.path.join(epoch_train_path, img_val),
                                os.path.join(epoch_seg_path, seg_val),
-                               mri_vols=mri_vols)
+                               mri_vols=mri_vols, device=device)
         with torch.no_grad():
             for i, data in enumerate(loader):
                 if i >= batch:
@@ -189,7 +192,7 @@ def validate_model(data_config, model, loss_func,
 
 
 def create_data_source_path(data_config, purpose, data_nature):
-    data_path = data_config["input_data_path"]
+    data_path = data_config["processed_data_path"]
     dataset_name = data_config["data_name"]
     img_path, seg_path = create_data_path(data_path, dataset_name, data_nature, purpose)
 
@@ -209,17 +212,18 @@ def source_instances(img_path, seg_path):
     return image_epochs, segmentation_epochs
 
 
-def derive_loader(img_path, seg_path, mri_vols):
+def derive_loader(img_path, seg_path, mri_vols, device):
     """
     Given a specific division, be it training, validation or testing
     (specified by option), load the batches of that dataset for the given
     epoch
-    :param img_path:
-    :param seg_path:
-    :param batch:
+    :param device: specified device, either cpu or gpu
+    :param mri_vols: selected mri volumes for examination
+    :param img_path: path to image data
+    :param seg_path: path to segmentation data
     :return:
     """
-    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols)
+    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols, device=device)
     loader = DataLoader(dataset, shuffle=True, batch_size=1)
     return loader
 
@@ -231,13 +235,18 @@ def training(config: BraTS2020Configuration):
     classes = data_config["classes"]
     selected_mri_vols = training_config["selected_mri"]
     channels = len(selected_mri_vols)
-    unet = UNet(in_channels=channels, classes=classes)
+    model = UNet(in_channels=channels, classes=classes)
+
+    # If GPu is specified
+    gpu = training_config["GPU"]
+    if gpu:
+        model.to(device="cuda" if torch.cuda.is_available() else "cpu")
 
     # Set up main training hyperparameters
     loss_func = DiceLoss(n_classes=classes)
     lr = training_config["ilr"]
     weight_decay = training_config["weight_decay"]
-    opt = Adam(unet.parameters(), lr=lr, weight_decay=weight_decay)
+    opt = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     clip_value = training_config["gradient_clipping"]
 
     # Set up patience and best validation loss
@@ -264,7 +273,7 @@ def training(config: BraTS2020Configuration):
     print("[INFO] training the network...")
     epoch = training_config["epoch"]
     batch = training_config["batch"]
-    verbose_mode = training_config["verbose"]
+    verbose_mode = training_config["verbose_mode"]
     # Get training
     data_nature = training_config["data_nature"]
     epoch_train_path, epoch_seg_path = create_data_source_path(data_config, "training", data_nature)
@@ -274,31 +283,31 @@ def training(config: BraTS2020Configuration):
         if e >= batch:
             break
         if verbose_mode:
-            print(e)
+            print(e+1)
         img_epoch = training_epochs[e]
         seg_epoch = segmentation_epochs[e]
 
         # Load the train loader
         train_loader = derive_loader(os.path.join(epoch_train_path, img_epoch),
                                      os.path.join(epoch_seg_path, seg_epoch),
-                                     mri_vols=selected_mri_vols)
+                                     mri_vols=selected_mri_vols, device=gpu)
 
         # Train the model and update the metric recordings
-        train_model(train_loader, unet, loss_func=loss_func,
+        train_model(train_loader, model, loss_func=loss_func,
                     opt=opt, learning_metrics=current_metrics,
-                    learning_functions=lm_funcs, clip_value=clip_value)
+                    learning_functions=lm_funcs, clip_value=clip_value, batch=batch)
 
-        validate_model(data_config, unet, loss_func=loss_func,
+        validate_model(data_config, model, loss_func=loss_func,
                        validation_recordings=validation_recordings,
                        learning_functions=lm_funcs, batch=batch, augmentation=data_nature,
-                       mri_vols=selected_mri_vols)
+                       mri_vols=selected_mri_vols, device=gpu)
 
         process_metrics(training_recordings, current_metrics, batch_count=batch)
 
         # see if early stopping is required
 
         torch.save({
-            'model_state_dict': unet.state_dict(),
+            'model_state_dict': model.state_dict(),
             'optim_state_dict': opt.state_dict(),
             'epoch': e,
         }, os.path.join(model_output, "model.pth"))
@@ -307,7 +316,7 @@ def training(config: BraTS2020Configuration):
         save_learning_metrics(save_path, exp_name, validation_recordings, "validation")
 
         # Determine if early stopping is necessary
-        best_valid, stagnation = early_stopping(validation_loss=validation_recordings[e],
+        best_valid, stagnation = early_stopping(validation_loss=validation_recordings["loss"][e],
                                                 best_valid=best_valid, stagnation=stagnation)
         if stagnation >= patience:
             break
@@ -318,7 +327,7 @@ def training(config: BraTS2020Configuration):
     model_output = os.path.join(save_path, exp_name)
     if not os.path.exists(model_output):
         os.makedirs(model_output)
-    torch.save(unet, os.path.join(model_output, "model.pth"))
+    torch.save(model, os.path.join(model_output, "model.pth"))
 
     # Save the loss and other defined metrics for training and validation
     save_learning_metrics(save_path, exp_name, training_recordings, "training")
@@ -351,4 +360,6 @@ def save_config(config, training_config):
 if __name__ == "__main__":
     config = BraTS2020Configuration(sys.argv[1])
     training(config)
-    save_config(config, training_config=config.training)
+    # save_config(config, training_config=config.training)
+
+# TODO save configuration does not work

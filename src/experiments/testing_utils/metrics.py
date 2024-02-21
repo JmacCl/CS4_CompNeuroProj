@@ -1,4 +1,5 @@
-from src.experiments.training_utils.learning_metrics import hausdorff_distance, dice_loss
+from src.experiments.training_utils.learning_metrics import hausdorff_distance, dice
+
 
 def derive_metrics(metrics):
     return_metrics = {}
@@ -7,7 +8,9 @@ def derive_metrics(metrics):
         if met == "hausdorff":
             return_metrics[met] = lambda x, y: hausdorff_distance(x, y, distance="euclidean")
         elif met == "dice":
-            return_metrics["dice"] = dice_loss
+            return_metrics["dice"] = dice
+
+    return return_metrics
 
 
 def set_up_testing_scores(metric_dict: dict):
