@@ -7,22 +7,10 @@ from torch.utils.data import DataLoader
 
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
-from src.experiments.training import create_data_source_path, source_instances, create_data_path
 from src.experiments.testing_utils.metrics import *
+from src.experiments.utility_functions.data_access import *
 
-def derive_loader(img_path, seg_path, mri_vols, device):
-    """
-    Given a specific division, be it training, validation or testing
-    (specified by option), load the batches of that dataset for the given
-    epoch
-    :param img_path:
-    :param seg_path:
-    :param batch:
-    :return:
-    """
-    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols, device=device)
-    loader = DataLoader(dataset, shuffle=True, batch_size=1)
-    return loader
+
 
 def update_test_scores(seg, pred, metric_function, metric_scores):
     """
@@ -116,18 +104,15 @@ def testing(testing_config: dict):
 
     # Obtain the testing files
     data_location = testing_config["data_location"]
-    data_name = testing_config["data_name"]
-    epoch_train_path, epoch_seg_path = create_data_path(data_location, dataset_name=data_name,
-                                                        data_nature="original", purpose="testing")
-    testing_images, testing_masks = source_instances(epoch_train_path, epoch_seg_path)
 
     # Derive metrics
     metric_functions = derive_metrics(testing_config["metrics"])
     metric_score = set_up_testing_scores(metric_dict=metric_functions)
     final_scores = set_up_testing_scores(metric_dict=metric_functions)
     batch = testing_config["batch"]
-    test_size = len(testing_images)
     mri_vols = testing_config["selected_mri"]
+    test_loader = derive_loader(data_directory=data_location, purpose="testing",
+                                mri_vols=mri_vols, batch=batch, transforms=None)
 
     for i in range(test_size):
 

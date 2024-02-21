@@ -12,3 +12,6 @@ matplotlib~=3.8.0
 scikit-image~=0.22.0
 torch~=2.2.0
 torchvision~=0.17.0
+tensorflow==2.14.0
+ray==2.9.2
+hausdorff==0.2.6

@@ -1,17 +1,42 @@
 import os
 import pickle
 import sys
+from pathlib import Path
 
 import yaml
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
 
+from torchvision.transforms import transforms, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
+
+from kornia.losses.focal import FocalLoss
+
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
 from src.experiments.training_utils.learning_metrics import *
+from src.experiments.utility_functions.data_access import derive_loader
 from src.models.UNet.unet2d import UNet
 
+from ray import tune
+from ray.air import Checkpoint, session
+from ray.tune.schedulers import ASHAScheduler
+
+
+def loss_function(loss_config: dict, classes):
+    loss_keys = list(loss_config.keys())
+
+    final_loss = 0
+
+    for k in loss_keys:
+        if k == "dice":
+            final_loss += loss_config[k]["coefficient"]*DiceLoss(n_classes=classes)
+        elif k == "focal":
+            alpha = loss_config[k]["alpha"]
+            gamma = loss_config[k]["gamma"]
+            final_loss += loss_config[k]["coefficient"]*FocalLoss(alpha=alpha, gamma=gamma)
+
+    return final_loss
 
 def update_metrics(loss, true_seg, pred_seg, results: dict, funcs: dict):
     for key in results.keys():
@@ -20,6 +45,24 @@ def update_metrics(loss, true_seg, pred_seg, results: dict, funcs: dict):
         else:
             results[key] += funcs[key](true_seg, pred_seg)
 
+def process_augmentations(augmentations):
+    """
+    Given the specifications for augmentations, process them
+    :param augmentations:
+    :return:
+    """
+    return_list = []
+    aug_keys = augmentations.keys()
+    for k in aug_keys:
+        if k == "vertical_flipping":
+            return_list.append(RandomVerticalFlip(augmentations[k]))
+        elif k == "horizontal_flipping":
+            return_list.append(RandomHorizontalFlip(augmentations[k]))
+        elif k == "rotation":
+            return_list.append(RandomRotation(degrees=augmentations[k]["degree"]),
+                                                p=augmentations[k]["probability"])
+
+    return transforms.Compose([return_list])
 
 def save_learning_metrics(save_path, exp_name, recordings, option):
     """
@@ -40,10 +83,10 @@ def save_learning_metrics(save_path, exp_name, recordings, option):
             pickle.dump(recordings[key], file)
 
 
-def process_metrics(results, current, batch_count):
+def process_metrics(results, current):
     for key in current.keys():
         old = results[key]
-        old.append(current[key] / batch_count)
+        old.append(current[key])
         results[key] = old
         current[key] = 0
 
@@ -82,34 +125,16 @@ def set_up_current_recordings(defined_metrics: list):
         current_recordings[met] = 0
     return current_recordings
 
-
-def create_data_path(path, dataset_name, data_nature, purpose: str):
-    """
-    This function will create the path that can be used to access
-    either the training or validation data required for the experiment depending
-    on the purpose variable
-    :param purpose: either variable for training, validation, or testing
-    :param path: path to the directory for all processed data
-    :param dataset_name: name of the dataset
-    :param data_nature: either an augmented or non-augmented source
-    :return: completed data path
-    """
-    img_path = os.path.join(path, dataset_name, data_nature, "inputs", purpose)
-    seg_path = os.path.join(path, dataset_name, data_nature, "targets", purpose)
-
-    return img_path, seg_path
-
-
 def train_model(loader, model, loss_func,
                 opt, learning_metrics, learning_functions,
-                clip_value, batch):
+                clip_value, batch, device):
     model.train()
     for i, data in enumerate(loader):
         if i >= batch:
             break
         # perform a forward pass and calculate the training loss
-        x = data["image"]
-        y = data["segmentation"]
+        x = data["image"].to(device)
+        y = data["segmentation"].to(device)
         opt.zero_grad()
 
         pred = model(x)
@@ -148,9 +173,9 @@ def early_stopping(validation_loss, stagnation, best_valid):
     return best_valid, stagnation
 
 
-def validate_model(data_config, model, loss_func,
+def validate_model(data_directory, model, loss_func,
                    validation_recordings, learning_functions,
-                   batch, augmentation, mri_vols, device):
+                   batch, mri_vols, device):
     """
     Validate the model with information from the data configuration and the model
     :param batch:
@@ -162,71 +187,19 @@ def validate_model(data_config, model, loss_func,
     :return:
     """
     batch_results = set_up_current_recordings(learning_functions.keys())
-    validation_results = set_up_current_recordings(learning_functions.keys())
-    epoch_train_path, epoch_seg_path = create_data_source_path(data_config, "validation", augmentation)
-
-    validation_imgs, validation_segs = source_instances(epoch_train_path, epoch_seg_path)
     model.eval()
-    for v in range(len(validation_imgs)):
+    loader = derive_loader(data_directory=data_directory, purpose="validation",
+                           mri_vols=mri_vols, transforms=None, batch=batch)
+    with torch.no_grad():
+        for i, data in enumerate(loader):
 
-        img_val = validation_imgs[v]
-        seg_val = validation_segs[v]
-
-        # Load the train loader
-        loader = derive_loader(os.path.join(epoch_train_path, img_val),
-                               os.path.join(epoch_seg_path, seg_val),
-                               mri_vols=mri_vols, device=device)
-        with torch.no_grad():
-            for i, data in enumerate(loader):
-                if i >= batch:
-                    break
-                # perform a forward pass and calculate the  loss
-                x = data["image"]
-                y = data["segmentation"]
-                pred = model(x)
-                loss = loss_func(pred, y)
-                update_metrics(loss.item(), y, pred, batch_results, learning_functions)
-            # add the loss to the total training loss so far
-            update_validation_results(validation_results, batch_results, batch)
-    process_metrics(validation_recordings, validation_results, batch_count=len(validation_imgs))
-
-
-def create_data_source_path(data_config, purpose, data_nature):
-    data_path = data_config["processed_data_path"]
-    dataset_name = data_config["data_name"]
-    img_path, seg_path = create_data_path(data_path, dataset_name, data_nature, purpose)
-
-    return img_path, seg_path
-
-
-def source_instances(img_path, seg_path):
-    """
-    Given the path specifications in the data_config, derive a list of all the
-    possible epochs for the  training data or validation instances for validation
-    :param seg_path:
-    :param img_path:
-    :return:
-    """
-    image_epochs = [file for file in sorted(os.listdir(img_path)) if file.endswith('.pt')]
-    segmentation_epochs = [file for file in sorted(os.listdir(seg_path)) if file.endswith('.pt')]
-    return image_epochs, segmentation_epochs
-
-
-def derive_loader(img_path, seg_path, mri_vols, device):
-    """
-    Given a specific division, be it training, validation or testing
-    (specified by option), load the batches of that dataset for the given
-    epoch
-    :param device: specified device, either cpu or gpu
-    :param mri_vols: selected mri volumes for examination
-    :param img_path: path to image data
-    :param seg_path: path to segmentation data
-    :return:
-    """
-    dataset = BraTS2020Data(img_path=img_path, seg_path=seg_path, mri_vols=mri_vols, device=device)
-    loader = DataLoader(dataset, shuffle=True, batch_size=1)
-    return loader
-
+            # perform a forward pass and calculate the  loss
+            x = data["image"].to(device)
+            y = data["segmentation"].to(device)
+            pred = model(x)
+            loss = loss_func(pred, y)
+            update_metrics(loss.item(), y, pred, batch_results, learning_functions)
+    process_metrics(validation_recordings, batch_results)
 
 def training(config: BraTS2020Configuration):
     # Set up Model parameters
@@ -235,7 +208,11 @@ def training(config: BraTS2020Configuration):
     classes = data_config["classes"]
     selected_mri_vols = training_config["selected_mri"]
     channels = len(selected_mri_vols)
-    model = UNet(in_channels=channels, classes=classes)
+
+    model_config = training_config["model"]
+    model = UNet(in_channels=channels, classes=classes,
+                 layers=model_config["layers"],
+                 dropout_p=model_config["dropout_rate"])
 
     # If GPu is specified
     gpu = training_config["GPU"]
@@ -243,7 +220,7 @@ def training(config: BraTS2020Configuration):
         model.to(device="cuda" if torch.cuda.is_available() else "cpu")
 
     # Set up main training hyperparameters
-    loss_func = DiceLoss(n_classes=classes)
+    loss_func = loss_function(training_config["loss"], classes=classes)
     lr = training_config["ilr"]
     weight_decay = training_config["weight_decay"]
     opt = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -274,35 +251,30 @@ def training(config: BraTS2020Configuration):
     epoch = training_config["epoch"]
     batch = training_config["batch"]
     verbose_mode = training_config["verbose_mode"]
+    data_dir = Path(training_config["data_directory"])
+    augmentations = process_augmentations(training_config["augmentations"])
     # Get training
-    data_nature = training_config["data_nature"]
-    epoch_train_path, epoch_seg_path = create_data_source_path(data_config, "training", data_nature)
-    training_epochs, segmentation_epochs = source_instances(epoch_train_path, epoch_seg_path)
 
     for e in range(epoch):
-        if e >= batch:
-            break
         if verbose_mode:
             print(e+1)
-        img_epoch = training_epochs[e]
-        seg_epoch = segmentation_epochs[e]
-
         # Load the train loader
-        train_loader = derive_loader(os.path.join(epoch_train_path, img_epoch),
-                                     os.path.join(epoch_seg_path, seg_epoch),
-                                     mri_vols=selected_mri_vols, device=gpu)
+        train_loader = derive_loader(data_directory=data_dir, purpose="training",
+                                     mri_vols=selected_mri_vols, transforms=augmentations,
+                                     batch=batch)
 
         # Train the model and update the metric recordings
         train_model(train_loader, model, loss_func=loss_func,
                     opt=opt, learning_metrics=current_metrics,
-                    learning_functions=lm_funcs, clip_value=clip_value, batch=batch)
+                    learning_functions=lm_funcs, clip_value=clip_value,
+                    batch=batch, device=gpu)
 
         validate_model(data_config, model, loss_func=loss_func,
                        validation_recordings=validation_recordings,
-                       learning_functions=lm_funcs, batch=batch, augmentation=data_nature,
+                       learning_functions=lm_funcs, batch=batch,
                        mri_vols=selected_mri_vols, device=gpu)
 
-        process_metrics(training_recordings, current_metrics, batch_count=batch)
+        process_metrics(training_recordings, current_metrics)
 
         # see if early stopping is required
 
@@ -320,8 +292,6 @@ def training(config: BraTS2020Configuration):
                                                 best_valid=best_valid, stagnation=stagnation)
         if stagnation >= patience:
             break
-    # print("Epoch completed and model successfully saved!")
-    #
 
     # Save the experiment deep learning model
     model_output = os.path.join(save_path, exp_name)

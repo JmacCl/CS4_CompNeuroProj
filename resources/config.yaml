@@ -25,15 +25,11 @@ data_creation:
     train: 0.8
     validation: 0.1
     testing: 0.1
-  data_augmentation:
-    - flipping:
-        - vertical
-        - horizontal
-    - rotation:
-        - 90
+
 ---
 training:
   experiment: test_bin_one # name of the experiment
+  data_directory: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\original
   epoch: 50 # epoch number
   batch: 32 # batch number
   output_size: # Output dimension for the model
@@ -49,26 +45,37 @@ training:
     - "hausdorff"
     - "IoU"
   ilr: 0.0001
-  loss_function: Dice
+  augmentations:
+    - vertical_flipping: 0.5
+    - horizontal_flipping: 0.5
+    - rotation:
+          degree: 90
+          probability: 0.5
+    - random_crop: 10
+  loss:
+    Dice:
+        coefficient: 0.5
+    Focal:
+        coefficient: 0.5
+        alpha: 1
+        gamma: 2
   optimizer: ADAM
-  alg_set_up:
-    name: UNet
-    parameters:
-      building_block:
-        - conv2d
-        - dropout
-        - conv2d
-        - batch_normalization
-        - relu
-      stacks:
-        - 16
-        - 32
-        - 64
-      kernel: 3
-      stride: 1
-      max_pool: 2
-      normalization: true
-      dropout: true
+  model:
+    building_block:
+      - conv2d
+      - dropout
+      - conv2d
+      - batch_normalization
+      - relu
+    layers:
+      - 64
+      - 128
+      - 256
+    kernel: 3
+    stride: 1
+    max_pool: 2
+    normalization: true
+    dropout_rate: 0.5
   verbose_mode: true # Print epoch progress
   GPU: cuda
   selected_mri:

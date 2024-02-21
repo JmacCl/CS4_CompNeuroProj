@@ -14,7 +14,7 @@ import torchvision.transforms.functional as TF
 
 class UNet(nn.Module):
 
-    def __init__(self, in_channels=3, classes=1, layers=None):
+    def __init__(self, in_channels=3, classes=1, layers=None, dropout_p=0):
         super(UNet, self).__init__()
         if layers is None:
             layers = [64, 128, 256]
@@ -34,7 +34,10 @@ class UNet(nn.Module):
 
         self.max_pool_2x2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
+        self.dropout = dropout_p
+
         self.final_conv = nn.Conv2d(layers[0], classes, kernel_size=1)
+
 
     def __double_conv(self, in_channels, out_channels):
         conv = nn.Sequential(
@@ -42,7 +45,8 @@ class UNet(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
+            nn.Dropout(self.dropout)
         )
         return conv
 
