@@ -15,3 +15,8 @@ torchvision~=0.17.0
 tensorflow==2.14.0
 ray==2.9.2
 hausdorff==0.2.6
+kornia==0.7.1
+numba==0.59.0
+requests==2.31.0
+pyarrow==15.0.0
+fsspec==2024.2.0

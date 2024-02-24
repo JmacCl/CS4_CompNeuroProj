@@ -22,6 +22,8 @@ class UNet(nn.Module):
         layer_layout.extend(layers)
         self.layers = layer_layout
 
+        self.dropout = dropout_p
+
         self.double_conv_downs = nn.ModuleList(
             [self.__double_conv(layer, layer_n) for layer, layer_n in zip(self.layers[:-1], self.layers[1:])])
 
@@ -34,7 +36,7 @@ class UNet(nn.Module):
 
         self.max_pool_2x2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.dropout = dropout_p
+
 
         self.final_conv = nn.Conv2d(layers[0], classes, kernel_size=1)
 

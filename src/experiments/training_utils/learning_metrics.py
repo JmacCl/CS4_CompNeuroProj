@@ -123,6 +123,5 @@ def hausdorff_distance(original, predictions, distance):
     predictions_binary = predictions_binary.cpu()
 
     # convert torch arrays into np arrays
-    distance = hd(original_binary.numpy(), predictions_binary.numpy(),
-                  distance=distance)
+    distance = hd(original_binary.numpy(), predictions_binary.numpy(), distance=distance)
     return distance

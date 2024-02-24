@@ -1,49 +1,53 @@
 import os
 import pickle
 import sys
+import pandas
+import requests
+import pyarrow
+import fsspec
+import torch
+import yaml
+
 from pathlib import Path
 
-import yaml
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
-
 from torchvision.transforms import transforms, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
 
 from kornia.losses.focal import FocalLoss
 
 from src.experiments.configs.config import BraTS2020Configuration
-from src.experiments.datasets.BraTS2020 import BraTS2020Data
+from src.experiments.training_utils.loss_functions import FocalDiceComboLoss
 from src.experiments.training_utils.learning_metrics import *
 from src.experiments.utility_functions.data_access import derive_loader
 from src.models.UNet.unet2d import UNet
 
 from ray import tune
-from ray.air import Checkpoint, session
+from ray.air import session
 from ray.tune.schedulers import ASHAScheduler
 
 
-def loss_function(loss_config: dict, classes):
-    loss_keys = list(loss_config.keys())
+def loss_function(loss_config: dict):
 
-    final_loss = 0
+    coefficients = loss_config["loss_coefficients"]
+    dice_coefficient = coefficients[0]
+    focal_coefficient = coefficients[1]
+    focal_alpha = loss_config["focal_alpha"]
+    focal_gamma = loss_config["focal_gamma"]
 
-    for k in loss_keys:
-        if k == "dice":
-            final_loss += loss_config[k]["coefficient"]*DiceLoss(n_classes=classes)
-        elif k == "focal":
-            alpha = loss_config[k]["alpha"]
-            gamma = loss_config[k]["gamma"]
-            final_loss += loss_config[k]["coefficient"]*FocalLoss(alpha=alpha, gamma=gamma)
 
-    return final_loss
+    return FocalDiceComboLoss(dice_coeff=dice_coefficient,
+                              focal_coeff=focal_coefficient, f_alpha=focal_alpha, f_gamma=focal_gamma)
 
 def update_metrics(loss, true_seg, pred_seg, results: dict, funcs: dict):
     for key in results.keys():
         if key == "loss":
             results[key] += loss
+        elif key == "hausdorff":
+            results[key] = sum([funcs[key](true_seg[batch_index], pred_seg[batch_index], distance="euclidean") for batch_index in range(true_seg.size(0))])/true_seg.size(0)
         else:
-            results[key] += funcs[key](true_seg, pred_seg)
+            results[key] += sum([funcs[key](true_seg[batch_index], pred_seg[batch_index]) for batch_index in range(true_seg.size(0))])/true_seg.size(0)
 
 def process_augmentations(augmentations):
     """
@@ -52,15 +56,13 @@ def process_augmentations(augmentations):
     :return:
     """
     return_list = []
-    aug_keys = augmentations.keys()
-    for k in aug_keys:
-        if k == "vertical_flipping":
-            return_list.append(RandomVerticalFlip(augmentations[k]))
-        elif k == "horizontal_flipping":
-            return_list.append(RandomHorizontalFlip(augmentations[k]))
-        elif k == "rotation":
-            return_list.append(RandomRotation(degrees=augmentations[k]["degree"]),
-                                                p=augmentations[k]["probability"])
+    for augs in augmentations:
+        if list(augs.keys())[0] == "vertical_flipping":
+            return_list.append(RandomVerticalFlip(augs["vertical_flipping"]))
+        elif list(augs.keys())[0] == "horizontal_flipping":
+            return_list.append(RandomHorizontalFlip(augs["horizontal_flipping"]))
+        elif list(augs.keys())[0] == "rotation":
+            return_list.append(RandomRotation(degrees=augs["rotation"]))
 
     return transforms.Compose([return_list])
 
@@ -83,10 +85,10 @@ def save_learning_metrics(save_path, exp_name, recordings, option):
             pickle.dump(recordings[key], file)
 
 
-def process_metrics(results, current):
+def process_metrics(results, current, iterations):
     for key in current.keys():
         old = results[key]
-        old.append(current[key])
+        old.append(current[key]/iterations)
         results[key] = old
         current[key] = 0
 
@@ -126,19 +128,18 @@ def set_up_current_recordings(defined_metrics: list):
     return current_recordings
 
 def train_model(loader, model, loss_func,
-                opt, learning_metrics, learning_functions,
-                clip_value, batch, device):
+                opt, learning_metrics, training_records, learning_functions,
+                clip_value, device):
     model.train()
+    record = 0
     for i, data in enumerate(loader):
-        if i >= batch:
-            break
         # perform a forward pass and calculate the training loss
         x = data["image"].to(device)
         y = data["segmentation"].to(device)
         opt.zero_grad()
 
         pred = model(x)
-        loss = loss_func(pred, y)
+        loss = loss_func(pred, torch.argmax(y, 1))
         # first, zero out any previously accumulated gradients, then
         # perform backpropagation, and then update model parameters
         loss.backward()
@@ -146,6 +147,10 @@ def train_model(loader, model, loss_func,
         opt.step()
         # add the loss to the total training loss so far
         update_metrics(loss.item(), y, pred, learning_metrics, learning_functions)
+        record = i
+    process_metrics(training_records, learning_metrics, record)
+
+
 
 
 def update_validation_results(validation_results, current, batch_count):
@@ -189,17 +194,18 @@ def validate_model(data_directory, model, loss_func,
     batch_results = set_up_current_recordings(learning_functions.keys())
     model.eval()
     loader = derive_loader(data_directory=data_directory, purpose="validation",
-                           mri_vols=mri_vols, transforms=None, batch=batch)
+                           mri_vols=mri_vols, transforms=False, batch=batch)
     with torch.no_grad():
+        record = 0
         for i, data in enumerate(loader):
-
             # perform a forward pass and calculate the  loss
             x = data["image"].to(device)
             y = data["segmentation"].to(device)
             pred = model(x)
-            loss = loss_func(pred, y)
+            loss = loss_func(pred, torch.argmax(y, dim=1))
             update_metrics(loss.item(), y, pred, batch_results, learning_functions)
-    process_metrics(validation_recordings, batch_results)
+            record = i
+    process_metrics(validation_recordings, batch_results, record)
 
 def training(config: BraTS2020Configuration):
     # Set up Model parameters
@@ -220,7 +226,7 @@ def training(config: BraTS2020Configuration):
         model.to(device="cuda" if torch.cuda.is_available() else "cpu")
 
     # Set up main training hyperparameters
-    loss_func = loss_function(training_config["loss"], classes=classes)
+    loss_func = loss_function(training_config["loss"])
     lr = training_config["ilr"]
     weight_decay = training_config["weight_decay"]
     opt = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -265,19 +271,16 @@ def training(config: BraTS2020Configuration):
 
         # Train the model and update the metric recordings
         train_model(train_loader, model, loss_func=loss_func,
-                    opt=opt, learning_metrics=current_metrics,
+                    opt=opt, learning_metrics=current_metrics, training_records=training_recordings,
                     learning_functions=lm_funcs, clip_value=clip_value,
-                    batch=batch, device=gpu)
+                    device=gpu)
 
-        validate_model(data_config, model, loss_func=loss_func,
+        validate_model(data_dir, model, loss_func=loss_func,
                        validation_recordings=validation_recordings,
                        learning_functions=lm_funcs, batch=batch,
                        mri_vols=selected_mri_vols, device=gpu)
 
-        process_metrics(training_recordings, current_metrics)
-
         # see if early stopping is required
-
         torch.save({
             'model_state_dict': model.state_dict(),
             'optim_state_dict': opt.state_dict(),
@@ -329,6 +332,7 @@ def save_config(config, training_config):
 
 if __name__ == "__main__":
     config = BraTS2020Configuration(sys.argv[1])
+
     training(config)
     # save_config(config, training_config=config.training)
 

@@ -9,6 +9,7 @@ from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
 from src.experiments.testing_utils.metrics import *
 from src.experiments.utility_functions.data_access import *
+from src.experiments.utility_functions.data_processing import process_metrics
 
 
 
@@ -43,7 +44,7 @@ def finalize_test_scores(final_scores, test_size):
         final_scores[key] = final_scores[key]/test_size
 
 
-def test_model(model, loader, batch, metric_score, metric_function):
+def test_model(model, loader, metric_score, metric_function):
     """
     Test the model with the specified testing metrics with the given batch
     :param model:
@@ -54,15 +55,16 @@ def test_model(model, loader, batch, metric_score, metric_function):
     """
     model.eval()
     with torch.no_grad():
+        record = 0
         for i, data in enumerate(loader):
-            if i >= batch:
-                break
             # perform a forward pass and calculate the  loss
             x = data["image"]
             y = data["segmentation"]
             pred = model(x)
             update_test_scores(y, pred, metric_function=metric_function,
                                metric_scores=metric_score)
+            record = i
+    finalize_test_scores(metric_score, record)
 
 
 def save_test_results(final_scores, test_sample, experiment_path, experiment_name):
@@ -108,31 +110,18 @@ def testing(testing_config: dict):
     # Derive metrics
     metric_functions = derive_metrics(testing_config["metrics"])
     metric_score = set_up_testing_scores(metric_dict=metric_functions)
-    final_scores = set_up_testing_scores(metric_dict=metric_functions)
     batch = testing_config["batch"]
     mri_vols = testing_config["selected_mri"]
-    test_loader = derive_loader(data_directory=data_location, purpose="testing",
-                                mri_vols=mri_vols, batch=batch, transforms=None)
+    test_loader = derive_loader(data_directory=data_location, purpose="testing", mri_vols=mri_vols, batch=batch, transforms=None)
+    test_model(model=model, loader=test_loader, metric_score=metric_score, metric_function=metric_functions)
 
-    for i in range(test_size):
+    # save_test_results(final_scores, test_sample=i+1,
+    #                     experiment_path=experiment_path,
+    #                     experiment_name=experiment_name)
 
-        test_img = testing_images[i]
-        test_mask = testing_images[i]
-        loader = derive_loader(os.path.join(epoch_train_path, test_img),
-                               os.path.join(epoch_seg_path, test_mask),
-                               mri_vols=mri_vols, device=gpu)
-        test_model(model=model, loader=loader,
-                   batch=batch, metric_score=metric_score,
-                   metric_function=metric_functions)
-        process_batch_scores(metric_score, final_scores, batch)
 
-        save_test_results(final_scores, test_sample=i+1,
-                          experiment_path=experiment_path,
-                          experiment_name=experiment_name)
 
-    finalize_test_scores(final_scores, test_size)
-
-    print(final_scores)
+    print(metric_score)
 
 
 

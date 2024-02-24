@@ -29,12 +29,17 @@ class BraTS2020Data(Dataset):
         image_path, seg_path = self.__create_data_path(directory, purpose)
         image_instances, seg_instances = self.__source_instances(img_path=image_path,
                                                                  seg_path=seg_path)
-        self.images = image_instances
-        self.segmentations = seg_instances
+        self.image_dir = image_path
+        self.seg_path = seg_path
+        self.images = sorted(image_instances, key=lambda x: int(x.split('_')[1].split(".")[0]))
+        self.segmentations = sorted(seg_instances, key=lambda x: int(x.split('_')[1].split(".")[0]))
         self.mri_vols = self.__select_mri_vols(mri_vols)
         self.instances_per_dir = len(self.images)
         self.sample_per_instance = sample_per_instance
-        self.transform = self.Augmentation(transform)
+        if transform:
+            self.transform = self.Augmentation(transform)
+        else:
+            self.transform = False
 
     def __len__(self):
         return self.sample_per_instance * self.instances_per_dir
@@ -50,8 +55,8 @@ class BraTS2020Data(Dataset):
         DI_index = self.__derive_data_instance_index(index=index)
         sample_index = self.__derive_sample_index(index=index)
 
-        image_instance = self.images[DI_index]
-        segmentation_instance = self.segmentations[DI_index]
+        image_instance = torch.load(os.path.join(self.image_dir, self.images[DI_index]))
+        segmentation_instance = torch.load(os.path.join(self.seg_path, self.segmentations[DI_index]))
 
         volumes = self.mri_vols
         image = image_instance[sample_index, volumes, :, :]
@@ -70,8 +75,8 @@ class BraTS2020Data(Dataset):
         :return:
         """
         return_indices = []
-        for keys in mri_vols.keys():
-            return_indices.append(mri_vols[keys])
+        for keys in mri_vols:
+            return_indices.append(keys)
         return return_indices
 
     def __derive_data_instance_index(self, index):
@@ -80,7 +85,7 @@ class BraTS2020Data(Dataset):
         the main directory the sample index belongs to
         :return: Index for each data instance in directory
         """
-        return math.ceil(index/self.instances_per_dir)
+        return math.ceil(index/self.sample_per_instance) - 1
 
     def __derive_sample_index(self, index):
         """
@@ -127,5 +132,5 @@ class BraTS2020Data(Dataset):
             self.transforms = transforms
 
         def __call__(self, data):
-            aug = random.choice(self.transforms)
+            aug = random.choice(self.transforms.transforms[0])
             return [aug(d) for d in data]

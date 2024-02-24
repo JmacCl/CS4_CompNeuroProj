@@ -2,7 +2,7 @@ import os
 
 from torch.utils.data import DataLoader
 
-from src.data.data_processors.brats_data import BraTS2020Data
+from src.experiments.datasets.BraTS2020 import BraTS2020Data
 
 
 def derive_loader(data_directory, purpose, mri_vols, transforms, batch):

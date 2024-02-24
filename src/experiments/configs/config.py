@@ -20,6 +20,7 @@ class BraTS2020Configuration:
         # Process data into a python dictionary, depending on if it is accepted
         self.data_creation = data["data_creation"]
         self.training = data["training"]
+        self.grid = data["grid_search"]
         self.testing = data["testing"]
         self.graphing = data["graphing"]
 
