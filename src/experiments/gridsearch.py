@@ -133,23 +133,24 @@ if __name__ == "__main__":
 
     grid_config = {
         "data_dir": data_directory,
-        "epoch": 1,
+        "epoch": 10,
         "batch": 32,
         "classes": 2,
         "gradient_clipping": tune.grid_search([1, 3, 5]),
-        "patience": tune.grid_search([5, 10, 15, 30]),
+        "patience": 5,
+        # "patience": tune.grid_search([5, 10, 15, 30]),
         "learning_metrics": ["accuracy", "hausdorff", "IoU"],
         "augmentations":
             [{"vertical_flipping": 0.5}, {"horizontal_flipping": 0.5}, {"rotation": 90}],
-        "ilr": tune.grid_search([0.0001, 0.001, 0.01, 0.1]),
-        "weight_decay": tune.grid_search([0.0001, 0.001, 0.01, 0.1]),
+        "ilr": tune.grid_search([0.0001, 0.001, 0.01]),
+        "weight_decay": tune.grid_search([0.0001, 0.001, 0.01]),
         "loss": {
             "loss_coefficients": tune.grid_search([[0.5, 0.5], [1.0, 0], [0, 1.0], [0.7, 0.3], [0.3, 0.7]]),
             "focal_alpha": tune.grid_search([0.5, 1, 1.5, 2, 3]),
             "focal_gamma": tune.grid_search([0.5, 1, 1.5, 2, 3])
         },
         "layers": tune.grid_search([[64, 128, 256], [128, 256, 512]]),
-        "dropout_rate": tune.grid_search([0, 0.25, 0.5, 0.75]),
+        "dropout_rate": tune.grid_search([0.25, 0.5, 0.75]),
         "selected_mri": [1, 2, 3]
         # "selected_mri": tune.grid_search([[0], [1], [2], [3],  [1, 2, 3], [0, 1, 2, 3]])
     }
@@ -166,12 +167,12 @@ if __name__ == "__main__":
     run_config = RunConfig(storage_path="D:\\Users\\James\\ray_tune_experiments", name="test_grid_search")
 
 
-    trainable_with_cpu_gpu = tune.with_resources(grid_training, {"cpu": 4})
+    trainable_with_cpu_gpu = tune.with_resources(grid_training, {"cpu": 6})
 
     tuner = tune.Tuner(
         trainable_with_cpu_gpu,
         tune_config=tune.TuneConfig(
-            num_samples=10,
+            num_samples=20,
             scheduler=ASHAScheduler(metric="loss", mode="min"),
         ),
         param_space=grid_config,
