@@ -36,10 +36,7 @@ class UNet(nn.Module):
 
         self.max_pool_2x2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-
-
         self.final_conv = nn.Conv2d(layers[0], classes, kernel_size=1)
-
 
     def __double_conv(self, in_channels, out_channels):
         conv = nn.Sequential(

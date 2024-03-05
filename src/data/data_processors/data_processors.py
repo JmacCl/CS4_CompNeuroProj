@@ -64,7 +64,6 @@ class BratsDataProcessor:
         self.data_name: str = config["data_name"]
         self.data_size = self.__determine_data_size()
         self.data_split = self.__determine_split(config["data_split"])
-        self.data_augmentation = self.__process_augmentations(config["data_augmentation"])
 
         # Start process of creating data
         self.__process_data()
@@ -125,30 +124,30 @@ class BratsDataProcessor:
 
         return return_dict
 
-    def __process_augmentations(self, augmentations: List):
-        """
-        Process the dictionaries of augmentation specifications and return
-        as a list of dictionaries of the different data augmentation functions
-        :param augmentations:
-        :return:
-        """
-        return_dict = {}
-        for augs in augmentations:
-            for key, vals in augs.items():
-                if key == "flipping":
-                    for techniques in vals:
-                        if techniques == "horizontal":
-                            return_dict["horizontal_flip"] = v2.RandomHorizontalFlip(1)
-                        elif techniques == "vertical":
-                            return_dict["vertical_flip"] = v2.RandomVerticalFlip(1)
-                elif key == "rotations":
-                    for rot in vals:
-                        return_dict[key + str(rot)] = v2.RandomRotation(degrees=rot)
-                elif key == "special":
-                    for techniques in vals:
-                        if techniques == "mix_up":
-                            return_dict["mix_up"] = v2.MixUp(num_classes=self.classes)
-        return return_dict
+    # def __process_augmentations(self, augmentations: List):
+    #     """
+    #     Process the dictionaries of augmentation specifications and return
+    #     as a list of dictionaries of the different data augmentation functions
+    #     :param augmentations:
+    #     :return:
+    #     """
+    #     return_dict = {}
+    #     for augs in augmentations:
+    #         for key, vals in augs.items():
+    #             if key == "flipping":
+    #                 for techniques in vals:
+    #                     if techniques == "horizontal":
+    #                         return_dict["horizontal_flip"] = v2.RandomHorizontalFlip(1)
+    #                     elif techniques == "vertical":
+    #                         return_dict["vertical_flip"] = v2.RandomVerticalFlip(1)
+    #             elif key == "rotations":
+    #                 for rot in vals:
+    #                     return_dict[key + str(rot)] = v2.RandomRotation(degrees=rot)
+    #             elif key == "special":
+    #                 for techniques in vals:
+    #                     if techniques == "mix_up":
+    #                         return_dict["mix_up"] = v2.MixUp(num_classes=self.classes)
+    #     return return_dict
     def __get_raw_data_files(self) -> Tuple[Dict, List]:
         """
         This function will get the raw input and segmented data from the
@@ -213,13 +212,13 @@ class BratsDataProcessor:
         count = 1
         for i in indices:
             image, seg = self.__collect_data(i, volume_holder, seg_list)
-            self.__save_instances(image, seg, "original", index=count)
-            for keys, augs in self.data_augmentation.items():
-                if keys == "mix_up":
-                    dl_img, dl_seg = self.__augment_by_loader(image, seg, function=augs)
-                    self.__save_instances(dl_img, dl_seg, keys, index=count)
-                else:
-                    self.__save_instances(augs(image), augs(seg), keys, index=count)
+            self.__save_instances(image, seg,  index=count)
+            # for keys, augs in self.data_augmentation.items():
+            #     if keys == "mix_up":
+            #         dl_img, dl_seg = self.__augment_by_loader(image, seg, function=augs)
+            #         self.__save_instances(dl_img, dl_seg, keys, index=count)
+            #     else:
+            #         self.__save_instances(augs(image), augs(seg), keys, index=count)
             count += 1
 
     def __determine_split_name(self, count):
@@ -231,20 +230,20 @@ class BratsDataProcessor:
         else:
             return "testing"
 
-    def __augment_by_loader(self, image, seg, function):
-        dataset = BraTS2020Data(inputs=image, segmentations=seg)
-        loader = DataLoader(dataset, batch_size=len(image), collate_fn=function, shuffle=True)
-        images = []
-        segs = []
-        for idx, batch in enumerate(loader):
-            for input, target in batch:
-                images.append(input)
-                segs.append(target)
+    # def __augment_by_loader(self, image, seg, function):
+    #     dataset = BraTS2020Data(inputs=image, segmentations=seg)
+    #     loader = DataLoader(dataset, batch_size=len(image), collate_fn=function, shuffle=True)
+    #     images = []
+    #     segs = []
+    #     for idx, batch in enumerate(loader):
+    #         for input, target in batch:
+    #             images.append(input)
+    #             segs.append(target)
+    #
+    #     return torch.stack(images, dim=0), torch.stack(segs, dim=0)
 
-        return torch.stack(images, dim=0), torch.stack(segs, dim=0)
 
-
-    def __save_instances(self, image, seg, data_type, index):
+    def __save_instances(self, image, seg, index):
         """
         Given a Dataloader that represents a data epoch, and save the files to the defined file
         :param loader:
@@ -253,14 +252,14 @@ class BratsDataProcessor:
         current_split = self.__determine_split_name(index)
 
         # image data
-        input_path = os.path.join(self.processed_images_home, self.data_name, data_type,
+        input_path = os.path.join(self.processed_images_home, self.data_name,
                                   "inputs", current_split)
         if not os.path.exists(input_path):
             os.makedirs(input_path)
         torch.save(image, os.path.join(input_path, "instance_" + str(index) + ".pt" ))
 
         # Targets
-        target_path = os.path.join(self.processed_images_home, self.data_name, data_type,
+        target_path = os.path.join(self.processed_images_home, self.data_name,
                                    "targets", current_split)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
@@ -409,8 +408,6 @@ class BratsDataProcessor:
     def get_label_data(self):
         return self.labels
 
-    def data_augmentation(self):
-        pass
 
 
 def get_int_list(config: ConfigParser, section, value):

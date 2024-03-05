@@ -43,13 +43,7 @@ class BraTS2020Configuration:
                     for key, val in d.items():
                         data[key] = val
             return data
-        # elif path.lower().endswith(".ini"):
-        #     ini_config = configparser.ConfigParser()
-        #     ini_config.read(path)
-        #
-        #     for section in ini_config.sections():
-        #         data[section] = dict(ini_config.items(section))
-        #     return data
+
         else:
             raise IOError("Invalid configuration file format, see READEME for details")
 

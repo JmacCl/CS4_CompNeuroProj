@@ -9,6 +9,8 @@ import torch
 from ray.tune.search.hyperopt import HyperOptSearch
 from torch.optim import Adam
 
+import torch_directml
+
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.training import training, early_stopping, save_learning_metrics, validate_model, train_model, \
     process_augmentations, set_up_recordings, loss_function, set_up_functions, set_up_current_recordings
@@ -34,6 +36,8 @@ def grid_training(grid_config, constant_param):
     model = UNet(in_channels=channels, classes=classes,
                  layers=grid_config["layers"],
                  dropout_p=grid_config["dropout_rate"])
+
+    model.to(constant_param["device"])
 
     # # If GPu is specified
     # gpu = training_config["GPU"]
@@ -85,12 +89,12 @@ def grid_training(grid_config, constant_param):
         # Train the model and update the metric recordings
         train_model(train_loader, model, loss_func=loss_func,
                     opt=opt, learning_metrics=current_metrics, training_records=training_recordings,
-                    learning_functions=lm_funcs, clip_value=clip_value, device="cpu")
+                    learning_functions=lm_funcs, clip_value=clip_value, device=device)
 
         validate_model(data_dir, model, loss_func=loss_func,
                        validation_recordings=validation_recordings,
                        learning_functions=lm_funcs, batch=batch,
-                       mri_vols=selected_mri_vols, device="cpu")
+                       mri_vols=selected_mri_vols, device=device)
 
         validation_loss = validation_recordings["loss"][e]
 
@@ -145,17 +149,26 @@ if __name__ == "__main__":
     save_path = r"D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_grid_search"
     data_directory = Path(r"D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\standard_test")
 
+
+    if torch_directml.is_available():
+        device = torch_directml.device()
+    else:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+
     constant_grid = {
         "data_dir": data_directory,
         "classes": 2,
         "learning_metrics": ["accuracy", "hausdorff", "IoU"],
         "augmentations":
             [{"vertical_flipping": 0.5}, {"horizontal_flipping": 0.5}, {"rotation": 90}],
+        "device": device
     }
 
 
     grid_config = {
-
         "epoch": tune.grid_search([1]),
         "batch": tune.grid_search([32]),
         "gradient_clipping": tune.grid_search([1, 3, 5]),
@@ -171,6 +184,25 @@ if __name__ == "__main__":
         "layers": tune.grid_search([[64, 128, 256], [128, 256, 512]]),
         "dropout_rate": tune.grid_search([0.25, 0.5, 0.75]),
         "selected_mri": tune.grid_search([[1, 2, 3]])
+        # "selected_mri": tune.grid_search([[0], [1], [2], [3],  [1, 2, 3], [0, 1, 2, 3]])
+    }
+
+    simple_search = {
+        "epoch": 1,
+        "batch": 32,
+        "gradient_clipping": 3,
+        "patience": 5,
+        # "patience": tune.grid_search([5, 10, 15, 30]),
+        "ilr": 0.0001,
+        "weight_decay": 0.001,
+        "loss": {
+            "loss_coefficients": [0.7, 0.3],
+            "focal_alpha": 1,
+            "focal_gamma": 1,
+        },
+        "layers":  [128, 256, 512],
+        "dropout_rate":  0.5,
+        "selected_mri": [1, 2, 3]
         # "selected_mri": tune.grid_search([[0], [1], [2], [3],  [1, 2, 3], [0, 1, 2, 3]])
     }
 
@@ -199,7 +231,7 @@ if __name__ == "__main__":
     print(total_combinations)
 
     trainable_with_cpu_gpu = tune.with_resources(tune.with_parameters(grid_training, constant_param=constant_grid),
-                                                 {"cpu": 2})
+                                                 resources={"cpu": 2, "gpu": 1})
 
     tuner = tune.Tuner(
         trainable_with_cpu_gpu,

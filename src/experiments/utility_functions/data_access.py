@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from src.experiments.datasets.BraTS2020 import BraTS2020Data
 
 
-def derive_loader(data_directory, purpose, mri_vols, transforms, batch):
+def derive_loader(data_directory, purpose, mri_vols, transforms, batch, device):
     """
     Given a specific division, be it training, validation or testing
     (specified by option), load the batches of that dataset for the given
@@ -18,7 +18,7 @@ def derive_loader(data_directory, purpose, mri_vols, transforms, batch):
     """
     dataset = BraTS2020Data(directory=data_directory, mri_vols=mri_vols, transform=transforms,
                             sample_per_instance=128, purpose=purpose)
-    loader = DataLoader(dataset, shuffle=True, batch_size=batch)
+    loader = DataLoader(dataset, shuffle=True, batch_size=batch, num_workers=4, pin_memory=True)
     return loader
 
 def source_instances(img_path, seg_path):

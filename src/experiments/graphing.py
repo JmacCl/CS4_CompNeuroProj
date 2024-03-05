@@ -250,14 +250,16 @@ def graphing(config: dict):
 
     # Plot experiment results
     experiments = config["experiments"]
-    for exp in experiments:
-        graph_experiment_output(exp)
+    if experiments:
+        for exp in experiments:
+            graph_experiment_output(exp)
 
     # Plot Learning metrics or Evaluation Results
 
     learning_metrics = config["learning_metrics"]
-    for plots in learning_metrics:
-        plot_learning_metrics(plots)
+    if learning_metrics:
+        for plots in learning_metrics:
+            plot_learning_metrics(plots)
 
 
 
