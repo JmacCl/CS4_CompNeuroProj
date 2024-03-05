@@ -25,6 +25,9 @@ from monai.transforms import AsDiscrete
 from src.experiments.configs.config import BraTS2020Configuration
 from src.experiments.utility_functions.data_access import derive_loader
 from src.models.UNet.unet2d import UNet
+from src.models.CS_Unet.vision_transformer import CS_Unet
+from src.models.Swin_Unet.vision_transformer import SwinUnet
+
 from src.experiments.training_utils.compound_loss_pytorch_main.unified_focal_loss_pytorch import AsymmetricUnifiedFocalLoss
 
 
@@ -267,12 +270,23 @@ def training(config: BraTS2020Configuration):
     classes = data_config["classes"]
     selected_mri_vols = training_config["selected_mri"]
     channels = len(selected_mri_vols)
+    output_size = (training_config["output_size"]["height"], training_config["output_size"]["width"])
 
     model_config = training_config["model"]
-    model = UNet(in_channels=channels, classes=classes,
-                 layers=model_config["layers"],
-                 dropout_p=model_config["dropout_rate"])
-
+    if model_config["name"] == "UNet":
+        model = UNet(in_channels=channels, classes=classes,
+                     layers=model_config["layers"],
+                     dropout_p=model_config["dropout_rate"])
+    elif model_config["name"] == "CS_Unet":
+        swin_config = model_config["swin"]
+        model = CS_Unet(in_channels=channels, img_size=output_size[0], num_classes=classes,
+                        drop_rate=model_config["dropout_rate"], depths=swin_config["depth"], embed_dim=swin_config["embed_dim"],
+                        window_size=swin_config["window_size"], num_heads=swin_config["num_heads"], patch_size=swin_config["patch_size"])
+    elif model_config["name"] == "Swin-Unet":
+        swin_config = model_config["swin"]
+        model = SwinUnet(in_channels=channels, img_size=output_size[0], num_classes=classes,
+                        drop_rate=model_config["dropout_rate"], depths=swin_config["depth"], embed_dim=swin_config["embed_dim"],
+                        window_size=swin_config["window_size"], num_heads=swin_config["num_heads"], patch_size=swin_config["patch_size"])
 
     if torch_directml.is_available():
         device = torch_directml.device(torch_directml.default_device())

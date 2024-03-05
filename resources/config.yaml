@@ -28,10 +28,10 @@ data_creation:
 
 ---
 training:
-  experiment: UNet_results # name of the experiment
-  data_directory: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\original
-  load: true
-  epoch: 10 # epoch number
+  experiment: swin_test # name of the experiment
+  data_directory: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\data\processed\test_binary_experiment\standard_test
+  load: false
+  epoch: 1 # epoch number
   batch: 32 # batch number
   output_size: # Output dimension for the model
     height: 128
@@ -42,7 +42,7 @@ training:
   weight_decay: 0.0001 # If using L2 weight regularization
   learning_metrics:
     - "IoU"
-  ilr: 0.001
+  ilr: 0.0001
   augmentations:
     - vertical_flipping: 0.5
     - horizontal_flipping: 0.5
@@ -55,6 +55,21 @@ training:
     "focal_gamma": 1
   optimizer: ADAM
   model:
+    name: CS_Unet
+    swin:
+      window_size: 4
+      patch_size: 4
+      embed_dim: 48
+      depth:
+        - 2
+        - 2
+        - 2
+        - 2
+      num_heads:
+        - 3
+        - 6
+        - 12
+        - 24
     building_block:
       - conv2d
       - dropout
@@ -209,14 +224,10 @@ graphing:
   learning_metrics:
     - Loss_results:
         recordings:
-          validation_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_epoch\interesting_valid\validation\Graph\loss.pkl
-          training_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_epoch\interesting_training\training\Graph\loss.pkl
+          validation_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\swin_test\validation\Graph\loss.pkl
+          training_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\swin_test\training\Graph\loss.pkl
         y_label: Loss Results
-    - Hausdorff_Results:
-        recordings:
-          validation_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_epoch\interesting_valid\validation\Graph\hausdorff.pkl
-          training_loss: D:\Users\James\Code_Projects\CS4_CompNeuroProj\CS4_CompNeuroProj\src\experiments\saved_model\test_epoch\interesting_training\training\Graph\hausdorff.pkl
-        y_label: Hausdorff Results
+
 #  images:
 #    rotation:
 #        location: C:\Users\james\Uni_Projects\CS4_CompNeuroProj\src\data\processed\main_binary_experiment\rotations90\inputs\training_utils\epoch_1.pt
